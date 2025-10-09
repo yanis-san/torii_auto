@@ -19,6 +19,7 @@ def show():
             if students_response.data:
                 students_list = []
                 for student in students_response.data:
+                    id_doc_link = student.get('id_document_link')
                     students_list.append({
                         'ID': student['id'],
                         'Code': student.get('student_code', 'N/A'),
@@ -26,6 +27,7 @@ def show():
                         'Nom': student['last_name'],
                         'Email': student['email'],
                         'Téléphone': student.get('phone_number', 'N/A'),
+                        'Pièce ID': id_doc_link if id_doc_link else 'N/A',
                         'Date de naissance': student.get('birth_date', 'N/A'),
                         'Année': student['year_short'],
                         'Numéro': student.get('number', 'N/A'),
@@ -33,7 +35,14 @@ def show():
                     })
 
                 df = pd.DataFrame(students_list)
-                st.dataframe(df, width="stretch", hide_index=True)
+                st.dataframe(
+                    df,
+                    column_config={
+                        "Pièce ID": st.column_config.LinkColumn("Pièce ID", display_text="📄 Voir"),
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
 
                 # Statistiques rapides
                 col1, col2, col3 = st.columns(3)

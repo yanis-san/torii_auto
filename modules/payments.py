@@ -6,22 +6,40 @@ from datetime import datetime
 # Tarifs des cours
 COURSE_FEES = {
     'Japonais': {
-        'online_group': 10000,
+        # Anciens tarifs
+        'online_group_old': 12000,
+        'online_individual_old': 1500,  # par heure
+        'presential_group_old': 12000,
+        'presential_individual_old': 1500,  # par heure
+        # Nouveaux tarifs
+        'online_group': 16000,
         'online_individual': 2000,  # par heure
-        'presential_group': 12000,
-        'presential_individual': 2500  # par heure
+        'presential_group': 16000,
+        'presential_individual': 2000  # par heure
     },
     'Chinois': {
+        # Anciens tarifs
+        'online_group_old': 15000,
+        'online_individual_old': 2000,
+        'presential_group_old': 15000,
+        'presential_individual_old': 2000,
+        # Nouveaux tarifs
         'online_group': 20000,
         'online_individual': 3000,
-        'presential_group': 22000,
-        'presential_individual': 3500
+        'presential_group': 20000,
+        'presential_individual': 3000
     },
     'Coréen': {
+        # Anciens tarifs
+        'online_group_old': 16000,
+        'online_individual_old': 1500,
+        'presential_group_old': 16000,
+        'presential_individual_old': 1500,
+        # Nouveaux tarifs
         'online_group': 15000,
-        'online_individual': 2500,
-        'presential_group': 17000,
-        'presential_individual': 3000
+        'online_individual': 2000,
+        'presential_group': 15000,
+        'presential_individual': 2000
     }
 }
 
@@ -209,7 +227,7 @@ def show():
                 st.info(f"**Frais de cours:** {course_fee:,.0f} DA + **Frais d'inscription:** {INSCRIPTION_FEE:,.0f} DA = **Total:** {total_fee:,.0f} DA")
 
                 # Pour les cours individuels en ligne, paiement intégral requis
-                if mode == 'online_individual':
+                if 'individual' in mode and 'online' in mode:
                     st.warning("⚠️ Les cours en ligne individuels nécessitent un paiement intégral pour activer l'inscription.")
                     payment_amount = total_fee
                 else:
@@ -235,8 +253,9 @@ def show():
                         enrollment_active = False
 
                         # Vérifier les conditions d'activation
-                        if group_data['mode'] == 'online_individual':
-                            # Paiement intégral requis
+                        mode = group_data['mode']
+                        if 'individual' in mode and 'online' in mode:
+                            # Paiement intégral requis pour cours individuels en ligne
                             if payment_amount >= total_fee:
                                 enrollment_active = True
                         else:
@@ -347,8 +366,8 @@ def show():
 
                                 should_activate = False
 
-                                if mode == 'online_individual':
-                                    # Vérifier si paiement intégral
+                                if 'individual' in mode and 'online' in mode:
+                                    # Vérifier si paiement intégral pour cours individuels en ligne
                                     if total_paid >= enr['total_course_fee']:
                                         should_activate = True
                                 else:

@@ -25,6 +25,7 @@ def show():
                         'Prénom': student['first_name'],
                         'Nom': student['last_name'],
                         'Email': student['email'],
+                        'Téléphone': student.get('phone_number', 'N/A'),
                         'Date de naissance': student.get('birth_date', 'N/A'),
                         'Année': student['year_short'],
                         'Numéro': student.get('number', 'N/A'),
@@ -62,6 +63,7 @@ def show():
                 first_name = st.text_input("Prénom *")
                 last_name = st.text_input("Nom *")
                 email = st.text_input("Email *")
+                phone_number = st.text_input("Téléphone")
 
             with col2:
                 birth_date = st.date_input("Date de naissance", value=None)
@@ -87,6 +89,7 @@ def show():
                                 'first_name': first_name,
                                 'last_name': last_name,
                                 'email': email,
+                                'phone_number': phone_number if phone_number else None,
                                 'year_short': year_short,
                                 'birth_date': birth_date.isoformat() if birth_date else None
                             }
@@ -131,6 +134,7 @@ def show():
                                 with col1:
                                     st.write(f"**Code Étudiant:** {student.get('student_code', 'N/A')}")
                                     st.write(f"**Email:** {student['email']}")
+                                    st.write(f"**Téléphone:** {student.get('phone_number', 'N/A')}")
                                     st.write(f"**Date de naissance:** {student.get('birth_date', 'N/A')}")
 
                                 with col2:

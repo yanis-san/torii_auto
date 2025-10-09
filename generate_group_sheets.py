@@ -204,7 +204,7 @@ def create_attendance_sheet(group_data):
     # Titre
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_run = title.add_run('FEUILLE DE PRÉSENCE')
+    title_run = title.add_run('FEUILLE DE PRÉSENCE 2025/2026')
     title_run.font.size = Pt(16)
     title_run.font.bold = True
 
@@ -325,7 +325,7 @@ def create_content_sheet(group_data):
     # Titre
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_run = title.add_run('FEUILLE DE CONTENU DES SÉANCES')
+    title_run = title.add_run('FEUILLE DE CONTENU DES SÉANCES 2025/2026')
     title_run.font.size = Pt(16)
     title_run.font.bold = True
 
@@ -431,7 +431,7 @@ def create_payment_tracking_sheet(group_data):
     # Titre
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_run = title.add_run('SUIVI DES PAIEMENTS')
+    title_run = title.add_run('SUIVI DES PAIEMENTS 2025/2026')
     title_run.font.size = Pt(16)
     title_run.font.bold = True
 

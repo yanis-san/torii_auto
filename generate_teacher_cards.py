@@ -157,6 +157,15 @@ def create_teacher_card(teacher_data, header_image_path='header_image.png'):
     doc.add_paragraph()  # Espace
     doc.add_paragraph()  # Espace
 
+    # Année scolaire (centré)
+    year_para = doc.add_paragraph()
+    year_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    year_run = year_para.add_run("Année Scolaire 2025/2026")
+    year_run.font.size = Pt(18)
+    year_run.font.bold = True
+
+    doc.add_paragraph()  # Espace
+
     # Nom de l'enseignant (très grand, centré)
     name_para = doc.add_paragraph()
     name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER

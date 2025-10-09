@@ -78,6 +78,10 @@ def get_group_students_data(group_id):
 
         student = student_response.data[0]
 
+        # Récupérer l'email et le téléphone
+        email = student.get('email', 'N/A')
+        phone_number = student.get('phone_number', 'N/A')
+
         # Récupérer les paiements de l'étudiant
         # Note: Les paiements ne sont pas liés à un groupe spécifique dans le schéma
         payments_response = supabase.table('payments').select('*').eq(
@@ -150,6 +154,8 @@ def get_group_students_data(group_id):
             'first_name': student['first_name'],
             'last_name': student['last_name'],
             'full_name': f"{student['first_name']} {student['last_name']}",
+            'email': email,
+            'phone_number': phone_number,
             'date_of_birth': student.get('birth_date', 'N/A'),
             'has_paid_minimum': 'Oui' if has_paid_minimum else 'Non',
             'total_paid': total_paid,
@@ -199,7 +205,7 @@ def create_registration_form(student_data, header_image_path='header_image.png')
         doc.add_paragraph()  # Espace après l'image
     else:
         # Si l'image n'existe pas, afficher le titre et sous-titre par défaut
-        title = doc.add_heading('FICHE D\'INSCRIPTION', 0)
+        title = doc.add_heading('FICHE D\'INSCRIPTION 2025/2026', 0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
         subtitle = doc.add_paragraph('Institut Torii - École de Langues Asiatiques')
@@ -212,13 +218,15 @@ def create_registration_form(student_data, header_image_path='header_image.png')
     # Informations de l'étudiant
     doc.add_heading('INFORMATIONS PERSONNELLES', 2)
 
-    table = doc.add_table(rows=6, cols=2)
+    table = doc.add_table(rows=8, cols=2)
     table.style = 'Light Grid Accent 1'
 
     # Remplir le tableau
     cells_data = [
         ('Code Étudiant:', student_data['student_code']),
         ('Nom complet:', student_data['full_name']),
+        ('Email:', student_data['email']),
+        ('Téléphone:', student_data['phone_number']),
         ('Date de naissance:', student_data['date_of_birth']),
         ('Date d\'inscription:', student_data['creation_date']),
         ('Paiement initial (≥1000 DA):', student_data['has_paid_minimum']),

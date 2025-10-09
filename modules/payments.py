@@ -54,8 +54,9 @@ def calculate_course_fee(language, mode, duration_months=3, hours=10):
         # Pour les cours individuels, on calcule par heure
         return COURSE_FEES[language][mode] * hours
     else:
-        # Pour les cours en groupe, tarif mensuel multiplié par la durée
-        return COURSE_FEES[language][mode] * duration_months
+        # Pour les cours en groupe, tarif total (non multiplié par la durée)
+        # Le tarif dans COURSE_FEES représente déjà le prix total de la formation
+        return COURSE_FEES[language][mode]
 
 def show():
     st.title("💰 Gestion des Paiements")
@@ -224,15 +225,28 @@ def show():
 
                 total_fee = course_fee + INSCRIPTION_FEE
 
+                # Affichage du total avec détail des mensualités
+                monthly_fee = course_fee / duration
                 st.info(f"**Frais de cours:** {course_fee:,.0f} DA + **Frais d'inscription:** {INSCRIPTION_FEE:,.0f} DA = **Total:** {total_fee:,.0f} DA")
 
-                # Pour les cours individuels en ligne, paiement intégral requis
+                if 'group' in mode:
+                    st.caption(f"💡 Paiement échelonné possible : {monthly_fee:,.0f} DA/mois sur {duration} mois")
+
+                # Messages et règles de paiement selon le type de cours
                 if 'individual' in mode and 'online' in mode:
+                    # Cours individuels en ligne : paiement intégral requis
                     st.warning("⚠️ Les cours en ligne individuels nécessitent un paiement intégral pour activer l'inscription.")
                     payment_amount = total_fee
+                elif 'individual' in mode:
+                    # Cours individuels présentiels : paiement flexible
+                    st.info(f"💡 Paiement échelonné possible : minimum {monthly_fee:,.0f} DA/mois + frais d'inscription au premier versement.")
+                    min_payment = monthly_fee + INSCRIPTION_FEE
+                    payment_amount = st.number_input(f"Montant du premier paiement (minimum {min_payment:,.0f} DA) *",
+                                                     min_value=min_payment, value=min_payment, step=1000.0)
                 else:
-                    st.info("💡 Pour les cours en groupe, le premier paiement doit inclure au moins la mensualité + frais d'inscription.")
-                    min_payment = (course_fee / duration) + INSCRIPTION_FEE
+                    # Cours en groupe
+                    st.info(f"💡 Paiement échelonné possible : minimum {monthly_fee:,.0f} DA/mois + frais d'inscription au premier versement.")
+                    min_payment = monthly_fee + INSCRIPTION_FEE
                     payment_amount = st.number_input(f"Montant du premier paiement (minimum {min_payment:,.0f} DA) *",
                                                      min_value=min_payment, value=min_payment, step=1000.0)
             else:
@@ -254,13 +268,15 @@ def show():
 
                         # Vérifier les conditions d'activation
                         mode = group_data['mode']
+                        monthly_fee = course_fee / duration
+
                         if 'individual' in mode and 'online' in mode:
                             # Paiement intégral requis pour cours individuels en ligne
                             if payment_amount >= total_fee:
                                 enrollment_active = True
                         else:
-                            # Premier paiement doit couvrir mensualité + inscription
-                            min_payment = (course_fee / duration) + INSCRIPTION_FEE
+                            # Premier paiement doit couvrir au moins une mensualité + frais d'inscription
+                            min_payment = monthly_fee + INSCRIPTION_FEE
                             if payment_amount >= min_payment:
                                 enrollment_active = True
 
@@ -371,10 +387,11 @@ def show():
                                     if total_paid >= enr['total_course_fee']:
                                         should_activate = True
                                 else:
-                                    # Vérifier si minimum atteint
+                                    # Vérifier si minimum atteint (une mensualité + frais d'inscription)
                                     course_fee = enr['total_course_fee'] - INSCRIPTION_FEE
                                     duration = group.get('duration_months', 3)
-                                    min_payment = (course_fee / duration) + INSCRIPTION_FEE
+                                    monthly_fee = course_fee / duration
+                                    min_payment = monthly_fee + INSCRIPTION_FEE
                                     if total_paid >= min_payment:
                                         should_activate = True
 

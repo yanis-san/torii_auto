@@ -8,6 +8,7 @@ streamlit = "*"
 supabase = "*"
 python-dotenv = "*"
 plotly = "*"
+python-docx = "*"
 
 [dev-packages]
 

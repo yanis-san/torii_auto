@@ -67,6 +67,8 @@ def show():
                             st.write(f"**Mode:** {group['mode']}")
                             st.write(f"**Durée:** {group['duration_months']} mois")
                             st.write(f"**Minimum d'étudiants:** {group['min_students']}")
+                            if group.get('start_date'):
+                                st.write(f"**Date de début:** {group['start_date']}")
 
                             # Afficher les enseignants
                             group_teachers = supabase.table('group_teacher').select('*, teachers(first_name, last_name, email)').eq('group_id', group['id']).execute()
@@ -159,6 +161,7 @@ def show():
             min_students = st.number_input("Nombre minimum d'étudiants *", min_value=1, value=5)
             mode = st.selectbox("Mode *", ["online_group", "online_individual", "presential_group", "presential_individual"])
             duration_months = st.number_input("Durée (en mois) *", min_value=1, value=3)
+            start_date = st.date_input("Date de début", value=None, help="Date de début du groupe (optionnel)")
 
             st.markdown("*Les champs marqués d'un astérisque sont obligatoires*")
 
@@ -176,6 +179,10 @@ def show():
                             'mode': mode,
                             'duration_months': duration_months
                         }
+
+                        # Ajouter la date de début si elle est spécifiée
+                        if start_date:
+                            new_group['start_date'] = start_date.isoformat()
 
                         response = supabase.table('groups').insert(new_group).execute()
 

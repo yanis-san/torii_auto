@@ -66,7 +66,12 @@ def show():
                 phone_number = st.text_input("Téléphone")
 
             with col2:
-                birth_date = st.date_input("Date de naissance", value=None)
+                birth_date = st.date_input(
+                    "Date de naissance",
+                    value=None,
+                    min_value=datetime(1940, 1, 1),
+                    max_value=datetime.now()
+                )
                 current_year = datetime.now().year % 100
                 year_short = st.number_input("Année (format court, ex: 26 pour 2026)",
                                             min_value=20, max_value=99, value=current_year)

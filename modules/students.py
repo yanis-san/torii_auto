@@ -64,6 +64,7 @@ def show():
                 last_name = st.text_input("Nom *")
                 email = st.text_input("Email *")
                 phone_number = st.text_input("Téléphone")
+                id_document_link = st.text_input("Lien pièce d'identité (URL)")
 
             with col2:
                 birth_date = st.date_input(
@@ -95,6 +96,7 @@ def show():
                                 'last_name': last_name,
                                 'email': email,
                                 'phone_number': phone_number if phone_number else None,
+                                'id_document_link': id_document_link if id_document_link else None,
                                 'year_short': year_short,
                                 'birth_date': birth_date.isoformat() if birth_date else None
                             }
@@ -140,6 +142,11 @@ def show():
                                     st.write(f"**Code Étudiant:** {student.get('student_code', 'N/A')}")
                                     st.write(f"**Email:** {student['email']}")
                                     st.write(f"**Téléphone:** {student.get('phone_number', 'N/A')}")
+                                    id_doc = student.get('id_document_link')
+                                    if id_doc:
+                                        st.write(f"**Pièce d'identité:** [📄 Voir le document]({id_doc})")
+                                    else:
+                                        st.write("**Pièce d'identité:** N/A")
                                     st.write(f"**Date de naissance:** {student.get('birth_date', 'N/A')}")
 
                                 with col2:

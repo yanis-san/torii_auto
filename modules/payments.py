@@ -135,7 +135,9 @@ def show():
                                     date = payment.get('payment_date', 'N/A')
                                     if date != 'N/A':
                                         date = datetime.fromisoformat(date.replace('Z', '+00:00')).strftime('%d/%m/%Y %H:%M')
-                                    st.write(f"- {payment['amount']:,.0f} DA le {date}")
+                                    receipt = payment.get('receipt_link')
+                                    receipt_text = f" - [📄 Reçu]({receipt})" if receipt else ""
+                                    st.write(f"- {payment['amount']:,.0f} DA le {date}{receipt_text}")
                             else:
                                 st.warning("Aucun paiement enregistré")
 
@@ -254,10 +256,11 @@ def show():
                         enr_response = supabase.table('enrollments').insert(new_enrollment).execute()
 
                         if enr_response.data:
-                            # Enregistrer le premier paiement
+                            # Enregistrer le premier paiement (sans lien de reçu lors de l'inscription initiale)
                             new_payment = {
                                 'student_id': student_data['id'],
-                                'amount': payment_amount
+                                'amount': payment_amount,
+                                'receipt_link': None
                             }
 
                             pay_response = supabase.table('payments').insert(new_payment).execute()
@@ -310,6 +313,7 @@ def show():
                 selected_student = None
 
             amount = st.number_input("Montant du paiement (DA) *", min_value=100.0, step=100.0)
+            receipt_link = st.text_input("Lien du reçu (URL)")
 
             st.markdown("*Les champs marqués d'un astérisque sont obligatoires*")
 
@@ -323,7 +327,8 @@ def show():
                         # Enregistrer le paiement
                         new_payment = {
                             'student_id': student_data['id'],
-                            'amount': amount
+                            'amount': amount,
+                            'receipt_link': receipt_link if receipt_link else None
                         }
 
                         response = supabase.table('payments').insert(new_payment).execute()

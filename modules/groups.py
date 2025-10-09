@@ -159,7 +159,16 @@ def show():
 
             level = st.text_input("Niveau *", placeholder="Ex: 1, 2, A1, B2, etc.")
             min_students = st.number_input("Nombre minimum d'étudiants *", min_value=1, value=5)
-            mode = st.selectbox("Mode *", ["online_group", "online_individual", "presential_group", "presential_individual"])
+            mode = st.selectbox("Mode *", [
+                "online_group",
+                "online_individual",
+                "presential_group",
+                "presential_individual",
+                "online_group_old",
+                "online_individual_old",
+                "presential_group_old",
+                "presential_individual_old"
+            ])
             duration_months = st.number_input("Durée (en mois) *", min_value=1, value=3)
             start_date = st.date_input("Date de début", value=None, help="Date de début du groupe (optionnel)")
 

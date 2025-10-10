@@ -10,18 +10,18 @@ def show():
 
     # Tabs pour organiser les différentes vues
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "💰 Gestion Caisse",
-        "📋 Historique Complet",
+        "💰 Caisse & Signature",
+        "➕ Ajouter Paiement",
+        "📋 Historique Signatures",
         "📈 Statistiques",
-        "💵 Montant Actuel",
         "👥 Par Personne"
     ])
 
     # ============================================
-    # TAB 1: GESTION DE CAISSE (NOUVEAU)
+    # TAB 1: CAISSE & SIGNATURE
     # ============================================
     with tab1:
-        st.subheader("💰 Gestion de la Caisse")
+        st.subheader("💰 Caisse & Signature")
 
         # Calculer le montant actuel en caisse
         try:
@@ -32,102 +32,46 @@ def show():
                 last_sig = last_signature.data[0]
                 last_reset_date = last_sig['reset_date']
                 amount_left_last_time = last_sig.get('amount_left', 0) or 0
+                last_reset_by = last_sig.get('reset_by', 'N/A')
 
                 # Compter UNIQUEMENT les paiements LIQUIDES depuis la dernière signature
-                payments_since = supabase.table('payments').select('amount').gte('payment_date', last_reset_date).eq('payment_method', 'liquide').execute()
+                payments_since = supabase.table('payments').select('*').gte('payment_date', last_reset_date).eq('payment_method', 'liquide').execute()
                 payments_total = sum([p['amount'] for p in payments_since.data]) if payments_since.data else 0
 
                 current_amount = amount_left_last_time + payments_total
             else:
                 # Pas de signature précédente, compter tous les paiements liquides
-                all_payments = supabase.table('payments').select('amount').eq('payment_method', 'liquide').execute()
+                all_payments = supabase.table('payments').select('*').eq('payment_method', 'liquide').execute()
                 current_amount = sum([p['amount'] for p in all_payments.data]) if all_payments.data else 0
                 last_reset_date = None
+                last_reset_by = 'N/A'
+                payments_since = all_payments
+                amount_left_last_time = 0
 
-            # Afficher le montant actuel
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                st.metric("💵 Montant Actuel en Caisse (Liquide)", f"{current_amount:,.0f} DA",
-                         help="Montant total des paiements liquides en caisse")
+            # Affichage en grand du montant
+            st.markdown("### 💵 Montant Actuel en Caisse")
+            st.markdown(f"# {current_amount:,.0f} DA")
 
             st.divider()
 
-            # Section: Ajouter un paiement manuel
-            st.markdown("### ➕ Ajouter un Paiement Liquide")
-            st.info("💡 Utilisez ce formulaire pour enregistrer un paiement liquide reçu directement en caisse")
+            # Détails en 2 colonnes
+            col1, col2 = st.columns(2)
 
-            with st.form("manual_cash_entry"):
-                col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("#### 📝 Dernière Signature")
+                if last_reset_date:
+                    last_date = datetime.fromisoformat(last_reset_date.replace('Z', '+00:00'))
+                    st.write(f"**Date:** {last_date.strftime('%d/%m/%Y à %H:%M')}")
+                    st.write(f"**Signé par:** {last_reset_by}")
+                    st.write(f"**Montant laissé:** {amount_left_last_time:,.0f} DA")
+                else:
+                    st.info("Aucune signature enregistrée")
 
-                with col1:
-                    # Sélectionner l'étudiant
-                    students = supabase.table('students').select('*').order('created_at', desc=True).execute()
-                    if students.data:
-                        student_options = {f"{s['first_name']} {s['last_name']} ({s.get('student_code', 'N/A')})": s for s in students.data}
-                        selected_student = st.selectbox("Étudiant *", list(student_options.keys()), key="cash_student")
-
-                        # Sélectionner l'inscription
-                        selected_enrollment = None
-                        enrollment_options = {}
-                        if selected_student:
-                            student_data = student_options[selected_student]
-                            enrollments = supabase.table('enrollments').select('*, groups(name, languages(name))').eq('student_id', student_data['id']).execute()
-
-                            if enrollments.data:
-                                for enr in enrollments.data:
-                                    group = enr.get('groups', {})
-                                    lang_name = group.get('languages', {}).get('name', 'N/A') if group.get('languages') else 'N/A'
-
-                                    # Calculer le solde
-                                    payments = supabase.table('payments').select('amount').eq('enrollment_id', enr['id']).execute()
-                                    total_paid = sum([p['amount'] for p in payments.data]) if payments.data else 0
-                                    remaining = enr['total_course_fee'] - total_paid
-
-                                    status_icon = "✅" if enr['enrollment_active'] else "❌"
-                                    label = f"{group.get('name', 'N/A')} ({lang_name}) - Restant: {remaining:,.0f} DA {status_icon}"
-                                    enrollment_options[label] = enr
-
-                                selected_enrollment = st.selectbox("Inscription *", list(enrollment_options.keys()), key="cash_enrollment")
-                            else:
-                                st.warning("Aucune inscription pour cet étudiant")
-                    else:
-                        st.error("Aucun étudiant disponible")
-                        selected_student = None
-
-                with col2:
-                    amount = st.number_input("Montant (DA) *", min_value=100.0, step=1000.0, key="cash_amount")
-                    receipt_link = st.text_input("Lien du reçu (optionnel)", key="cash_receipt")
-
-                st.markdown("*Les champs marqués d'un astérisque sont obligatoires*")
-
-                submitted = st.form_submit_button("💵 Enregistrer le Paiement Liquide", use_container_width=True)
-
-                if submitted:
-                    if selected_student and selected_enrollment and amount > 0:
-                        try:
-                            student_data = student_options[selected_student]
-                            enr_data = enrollment_options[selected_enrollment]
-
-                            # Enregistrer le paiement LIQUIDE
-                            new_payment = {
-                                'student_id': student_data['id'],
-                                'enrollment_id': enr_data['id'],
-                                'amount': amount,
-                                'payment_method': 'liquide',  # TOUJOURS liquide ici
-                                'receipt_link': receipt_link if receipt_link else None
-                            }
-
-                            response = supabase.table('payments').insert(new_payment).execute()
-
-                            if response.data:
-                                st.success(f"✅ Paiement de {amount:,.0f} DA enregistré en caisse!")
-                                st.rerun()
-                            else:
-                                st.error("Erreur lors de l'enregistrement")
-                        except Exception as e:
-                            st.error(f"Erreur : {str(e)}")
-                    else:
-                        st.warning("Veuillez remplir tous les champs obligatoires")
+            with col2:
+                st.markdown("#### 💳 Nouveaux Paiements Liquides")
+                payments_count = len(payments_since.data) if payments_since.data else 0
+                st.write(f"**Nombre de paiements:** {payments_count}")
+                st.write(f"**Montant total:** {payments_total:,.0f} DA")
 
             st.divider()
 
@@ -191,10 +135,120 @@ def show():
             st.error(f"Erreur : {str(e)}")
 
     # ============================================
-    # TAB 2: HISTORIQUE COMPLET
+    # TAB 2: AJOUTER UN PAIEMENT
     # ============================================
     with tab2:
-        st.subheader("Historique des Signatures de Comptage")
+        st.subheader("➕ Enregistrer un Paiement")
+        st.info("💡 Utilisez ce formulaire pour enregistrer un paiement (liquide ou en ligne)")
+
+        with st.form("add_payment_form_tracker"):
+            # Sélectionner l'étudiant
+            try:
+                students = supabase.table('students').select('*').order('created_at', desc=True).execute()
+                if students.data:
+                    student_options = {f"{s['first_name']} {s['last_name']} ({s.get('student_code', 'N/A')})": s for s in students.data}
+                    selected_student = st.selectbox("Étudiant *", list(student_options.keys()), key="tracker_student")
+
+                    # Sélectionner l'inscription
+                    selected_enrollment = None
+                    enrollment_options = {}
+                    if selected_student:
+                        student_data = student_options[selected_student]
+                        enrollments = supabase.table('enrollments').select('*, groups(name, languages(name))').eq('student_id', student_data['id']).execute()
+
+                        if enrollments.data:
+                            for enr in enrollments.data:
+                                group = enr.get('groups', {})
+                                lang_name = group.get('languages', {}).get('name', 'N/A') if group.get('languages') else 'N/A'
+
+                                # Calculer le solde
+                                payments = supabase.table('payments').select('amount').eq('enrollment_id', enr['id']).execute()
+                                total_paid = sum([p['amount'] for p in payments.data]) if payments.data else 0
+                                remaining = enr['total_course_fee'] - total_paid
+
+                                status_icon = "✅" if enr['enrollment_active'] else "❌"
+                                label = f"{group.get('name', 'N/A')} ({lang_name}) - Restant: {remaining:,.0f} DA {status_icon}"
+                                enrollment_options[label] = enr
+
+                            selected_enrollment = st.selectbox("Inscription *", list(enrollment_options.keys()), key="tracker_enrollment")
+
+                            # Afficher le détail du solde
+                            if selected_enrollment:
+                                enr_data = enrollment_options[selected_enrollment]
+                                payments = supabase.table('payments').select('amount').eq('enrollment_id', enr_data['id']).execute()
+                                total_paid = sum([p['amount'] for p in payments.data]) if payments.data else 0
+                                remaining = enr_data['total_course_fee'] - total_paid
+
+                                if remaining > 0:
+                                    st.warning(f"💰 Montant restant pour cette inscription: {remaining:,.0f} DA")
+                                else:
+                                    st.success("✅ Cette inscription est entièrement payée")
+                        else:
+                            st.info("Aucune inscription pour cet étudiant")
+                else:
+                    st.error("Aucun étudiant disponible")
+                    selected_student = None
+            except Exception as e:
+                st.error(f"Erreur : {str(e)}")
+                selected_student = None
+                selected_enrollment = None
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                amount = st.number_input("Montant (DA) *", min_value=100.0, step=1000.0, key="tracker_amount")
+
+            with col2:
+                # Méthode de paiement
+                payment_method = st.selectbox(
+                    "Méthode de paiement *",
+                    ["💵 Liquide", "💳 En Ligne"],
+                    help="Sélectionnez si le paiement est en liquide ou en ligne",
+                    key="tracker_payment_method"
+                )
+
+            receipt_link = st.text_input("Lien du reçu (optionnel)", key="tracker_receipt")
+
+            st.markdown("*Les champs marqués d'un astérisque sont obligatoires*")
+
+            submitted = st.form_submit_button("💳 Enregistrer le Paiement", use_container_width=True)
+
+            if submitted:
+                if selected_student and selected_enrollment and amount > 0:
+                    try:
+                        student_data = student_options[selected_student]
+                        enr_data = enrollment_options[selected_enrollment]
+
+                        # Convertir la méthode de paiement
+                        method_value = 'liquide' if '💵' in payment_method else 'en_ligne'
+
+                        # Enregistrer le paiement
+                        new_payment = {
+                            'student_id': student_data['id'],
+                            'enrollment_id': enr_data['id'],
+                            'amount': amount,
+                            'payment_method': method_value,
+                            'receipt_link': receipt_link if receipt_link else None
+                        }
+
+                        response = supabase.table('payments').insert(new_payment).execute()
+
+                        if response.data:
+                            payment_type_text = "💵 liquide" if method_value == 'liquide' else "💳 en ligne"
+                            st.success(f"✅ Paiement de {amount:,.0f} DA ({payment_type_text}) enregistré avec succès!")
+                            st.rerun()
+                        else:
+                            st.error("Erreur lors de l'enregistrement")
+                    except Exception as e:
+                        st.error(f"Erreur : {str(e)}")
+                else:
+                    st.warning("Veuillez remplir tous les champs obligatoires")
+
+    # ============================================
+    # TAB 3: HISTORIQUE DES SIGNATURES
+    # ============================================
+    with tab3:
+        st.subheader("📋 Historique des Signatures de Comptage")
 
         try:
             # Récupérer toutes les signatures (exclure l'initialisation)
@@ -248,10 +302,10 @@ def show():
             st.error(f"Erreur : {str(e)}")
 
     # ============================================
-    # TAB 3: STATISTIQUES
+    # TAB 4: STATISTIQUES (ANALYSES DÉTAILLÉES)
     # ============================================
-    with tab3:
-        st.subheader("Statistiques et Analyses")
+    with tab4:
+        st.subheader("📈 Statistiques et Analyses")
 
         try:
             signatures = supabase.table('cash_register_resets').select('*').neq('reset_by', 'Système').order('reset_date', desc=True).execute()
@@ -362,90 +416,6 @@ def show():
 
             else:
                 st.info("Aucune donnée disponible")
-
-        except Exception as e:
-            st.error(f"Erreur : {str(e)}")
-
-    # ============================================
-    # TAB 4: MONTANT ACTUEL EN CAISSE
-    # ============================================
-    with tab4:
-        st.subheader("💰 Montant Actuel en Caisse")
-
-        try:
-            # Récupérer la dernière signature
-            last_signature = supabase.table('cash_register_resets').select('*').order('reset_date', desc=True).limit(1).execute()
-
-            if last_signature.data:
-                last_sig = last_signature.data[0]
-                last_reset_date = last_sig['reset_date']
-                amount_left_last_time = last_sig.get('amount_left', 0) or 0
-                last_reset_by = last_sig.get('reset_by', 'N/A')
-
-                # Compter UNIQUEMENT les paiements LIQUIDES depuis la dernière signature
-                payments_since = supabase.table('payments').select('*').gte('payment_date', last_reset_date).eq('payment_method', 'liquide').execute()
-
-                payments_total = sum([p['amount'] for p in payments_since.data]) if payments_since.data else 0
-                payments_count = len(payments_since.data) if payments_since.data else 0
-
-                # Montant total en caisse (LIQUIDE uniquement)
-                current_amount = amount_left_last_time + payments_total
-
-                # Affichage en grand
-                st.markdown("### 💵 Montant Total en Caisse")
-                st.markdown(f"# {current_amount:,.0f} DA")
-
-                st.divider()
-
-                # Détails
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.markdown("#### 📝 Dernière Signature")
-                    last_date = datetime.fromisoformat(last_reset_date.replace('Z', '+00:00'))
-                    st.write(f"**Date:** {last_date.strftime('%d/%m/%Y à %H:%M')}")
-                    st.write(f"**Signé par:** {last_reset_by}")
-                    st.write(f"**Montant laissé:** {amount_left_last_time:,.0f} DA")
-
-                    if last_sig.get('notes'):
-                        st.write(f"**Observations:** {last_sig['notes']}")
-
-                with col2:
-                    st.markdown("#### 💳 Nouveaux Paiements")
-                    st.write(f"**Nombre de paiements:** {payments_count}")
-                    st.write(f"**Montant total:** {payments_total:,.0f} DA")
-
-                st.divider()
-
-                # Détail des nouveaux paiements
-                if payments_since.data:
-                    st.markdown("#### 📋 Détail des Nouveaux Paiements")
-
-                    payments_detail = []
-                    for payment in payments_since.data:
-                        payment_date = datetime.fromisoformat(payment['payment_date'].replace('Z', '+00:00'))
-
-                        # Récupérer les infos de l'étudiant
-                        student_info = supabase.table('students').select('first_name, last_name, student_code').eq('id', payment['student_id']).execute()
-                        student_name = "N/A"
-                        student_code = "N/A"
-                        if student_info.data:
-                            student = student_info.data[0]
-                            student_name = f"{student.get('first_name', '')} {student.get('last_name', '')}"
-                            student_code = student.get('student_code', 'N/A')
-
-                        payments_detail.append({
-                            'Date': payment_date.strftime('%d/%m/%Y %H:%M'),
-                            'Étudiant': student_name,
-                            'Code': student_code,
-                            'Montant': f"{payment['amount']:,.0f} DA"
-                        })
-
-                    df_payments = pd.DataFrame(payments_detail)
-                    st.dataframe(df_payments, use_container_width=True, hide_index=True)
-
-            else:
-                st.info("Aucune signature enregistrée")
 
         except Exception as e:
             st.error(f"Erreur : {str(e)}")

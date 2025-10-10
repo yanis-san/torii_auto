@@ -12,7 +12,17 @@ def show():
     current_year = get_current_academic_year()
     if not current_year:
         st.error("⚠️ Aucune année académique active trouvée dans Supabase. Veuillez configurer une année académique.")
+        # Afficher les données de la table pour diagnostic
+        try:
+            all_years = supabase.table('academic_years').select('*').execute()
+            st.write("**Années académiques disponibles :**", all_years.data)
+        except Exception as e:
+            st.write(f"Erreur lors de la récupération des années: {e}")
         st.stop()
+
+    # Afficher les détails de l'année actuelle pour debug
+    st.sidebar.write("**Debug - Année actuelle:**")
+    st.sidebar.json(current_year)
 
     tab1, tab2, tab3 = st.tabs(["📋 Liste", "➕ Ajouter", "🔍 Rechercher"])
 
@@ -103,6 +113,11 @@ def show():
             if submitted:
                 if first_name and last_name and email:
                     try:
+                        # Vérifier que l'année académique est bien définie
+                        if not current_year or not current_year.get('id'):
+                            st.error("❌ Erreur : Aucune année académique active. Veuillez vérifier la configuration dans Supabase.")
+                            st.stop()
+
                         # Vérifier si l'email existe déjà
                         existing = supabase.table('students').select('*').eq('email', email).execute()
 

@@ -336,7 +336,7 @@ def show():
                     # Dernière signature
                     last_sig = signatures.data[0]
                     last_date = datetime.fromisoformat(last_sig['reset_date'].replace('Z', '+00:00'))
-                    st.metric("Dernière Signature", last_date.strftime('%d/%m/%Y'))
+                    st.metric("Dernière Signature", last_date.strftime('%d/%m/%Y %H:%M'))
 
             else:
                 st.info("Aucune signature enregistrée pour le moment")

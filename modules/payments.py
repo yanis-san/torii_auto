@@ -81,8 +81,8 @@ def show():
                     group = enr.get('groups', {})
                     lang_name = group.get('languages', {}).get('name', 'N/A') if group.get('languages') else 'N/A'
 
-                    # Calculer le total payé
-                    payments = supabase.table('payments').select('amount').eq('student_id', enr['student_id']).execute()
+                    # Calculer le total payé pour CETTE inscription uniquement
+                    payments = supabase.table('payments').select('amount').eq('enrollment_id', enr['id']).execute()
                     total_paid = sum([p['amount'] for p in payments.data]) if payments.data else 0
 
                     remaining = enr['total_course_fee'] - total_paid
@@ -139,8 +139,8 @@ def show():
                             st.write(f"**Mode:** {group.get('mode', 'N/A')}")
                             st.write(f"**Total Cours:** {enr['total_course_fee']:,.0f} DA")
 
-                            # Historique des paiements
-                            payments = supabase.table('payments').select('*').eq('student_id', enr['student_id']).order('payment_date', desc=True).execute()
+                            # Historique des paiements pour CETTE inscription uniquement
+                            payments = supabase.table('payments').select('*').eq('enrollment_id', enr['id']).order('payment_date', desc=True).execute()
 
                             if payments.data:
                                 total_paid = sum([p['amount'] for p in payments.data])
@@ -291,9 +291,10 @@ def show():
                         enr_response = supabase.table('enrollments').insert(new_enrollment).execute()
 
                         if enr_response.data:
-                            # Enregistrer le premier paiement (sans lien de reçu lors de l'inscription initiale)
+                            # Enregistrer le premier paiement lié à cette inscription
                             new_payment = {
                                 'student_id': student_data['id'],
+                                'enrollment_id': enr_response.data[0]['id'],
                                 'amount': payment_amount,
                                 'receipt_link': None
                             }
@@ -325,27 +326,49 @@ def show():
                     student_options = {f"{s['first_name']} {s['last_name']} ({s.get('student_code', 'N/A')})": s for s in students.data}
                     selected_student = st.selectbox("Étudiant *", list(student_options.keys()), key="payment_student")
 
-                    # Afficher le solde restant
+                    # Sélectionner l'inscription
+                    selected_enrollment = None
+                    enrollment_options = {}
                     if selected_student:
                         student_data = student_options[selected_student]
-                        enrollments = supabase.table('enrollments').select('*').eq('student_id', student_data['id']).execute()
+                        enrollments = supabase.table('enrollments').select('*, groups(name, languages(name))').eq('student_id', student_data['id']).execute()
 
                         if enrollments.data:
-                            total_due = sum([e['total_course_fee'] for e in enrollments.data])
-                            payments = supabase.table('payments').select('amount').eq('student_id', student_data['id']).execute()
-                            total_paid = sum([p['amount'] for p in payments.data]) if payments.data else 0
-                            remaining = total_due - total_paid
+                            for enr in enrollments.data:
+                                group = enr.get('groups', {})
+                                lang_name = group.get('languages', {}).get('name', 'N/A') if group.get('languages') else 'N/A'
 
-                            if remaining > 0:
-                                st.warning(f"💰 Montant restant: {remaining:,.0f} DA")
-                            else:
-                                st.success("✅ Tous les paiements sont à jour")
+                                # Calculer le solde pour cette inscription
+                                payments = supabase.table('payments').select('amount').eq('enrollment_id', enr['id']).execute()
+                                total_paid = sum([p['amount'] for p in payments.data]) if payments.data else 0
+                                remaining = enr['total_course_fee'] - total_paid
+
+                                status_icon = "✅" if enr['enrollment_active'] else "❌"
+                                label = f"{group.get('name', 'N/A')} ({lang_name}) - Restant: {remaining:,.0f} DA {status_icon}"
+                                enrollment_options[label] = enr
+
+                            selected_enrollment = st.selectbox("Inscription *", list(enrollment_options.keys()), key="payment_enrollment")
+
+                            # Afficher le détail du solde pour l'inscription sélectionnée
+                            if selected_enrollment:
+                                enr_data = enrollment_options[selected_enrollment]
+                                payments = supabase.table('payments').select('amount').eq('enrollment_id', enr_data['id']).execute()
+                                total_paid = sum([p['amount'] for p in payments.data]) if payments.data else 0
+                                remaining = enr_data['total_course_fee'] - total_paid
+
+                                if remaining > 0:
+                                    st.warning(f"💰 Montant restant pour cette inscription: {remaining:,.0f} DA")
+                                else:
+                                    st.success("✅ Cette inscription est entièrement payée")
+                        else:
+                            st.info("Aucune inscription pour cet étudiant")
                 else:
                     st.error("Aucun étudiant disponible")
                     selected_student = None
             except Exception as e:
                 st.error(f"Erreur : {str(e)}")
                 selected_student = None
+                selected_enrollment = None
 
             amount = st.number_input("Montant du paiement (DA) *", min_value=100.0, step=100.0)
             receipt_link = st.text_input("Lien du reçu (URL)")
@@ -355,13 +378,15 @@ def show():
             submitted = st.form_submit_button("Enregistrer le paiement", width="stretch")
 
             if submitted:
-                if selected_student and amount > 0:
+                if selected_student and selected_enrollment and amount > 0:
                     try:
                         student_data = student_options[selected_student]
+                        enr_data = enrollment_options[selected_enrollment]
 
-                        # Enregistrer le paiement
+                        # Enregistrer le paiement lié à cette inscription
                         new_payment = {
                             'student_id': student_data['id'],
+                            'enrollment_id': enr_data['id'],
                             'amount': amount,
                             'receipt_link': receipt_link if receipt_link else None
                         }
@@ -369,26 +394,24 @@ def show():
                         response = supabase.table('payments').insert(new_payment).execute()
 
                         if response.data:
-                            # Vérifier si on doit activer des inscriptions
-                            enrollments = supabase.table('enrollments').select('*, groups(mode, duration_months)').eq('student_id', student_data['id']).eq('enrollment_active', False).execute()
-
-                            for enr in enrollments.data:
-                                # Recalculer le total payé
-                                payments = supabase.table('payments').select('amount').eq('student_id', student_data['id']).execute()
+                            # Vérifier si on doit activer cette inscription
+                            if not enr_data['enrollment_active']:
+                                # Recalculer le total payé pour cette inscription
+                                payments = supabase.table('payments').select('amount').eq('enrollment_id', enr_data['id']).execute()
                                 total_paid = sum([p['amount'] for p in payments.data]) if payments.data else 0
 
-                                group = enr.get('groups', {})
+                                group = enr_data.get('groups', {})
                                 mode = group.get('mode', '')
 
                                 should_activate = False
 
                                 if 'individual' in mode and 'online' in mode:
                                     # Vérifier si paiement intégral pour cours individuels en ligne
-                                    if total_paid >= enr['total_course_fee']:
+                                    if total_paid >= enr_data['total_course_fee']:
                                         should_activate = True
                                 else:
                                     # Vérifier si minimum atteint (une mensualité + frais d'inscription)
-                                    course_fee = enr['total_course_fee'] - INSCRIPTION_FEE
+                                    course_fee = enr_data['total_course_fee'] - INSCRIPTION_FEE
                                     duration = group.get('duration_months', 3)
                                     monthly_fee = course_fee / duration
                                     min_payment = monthly_fee + INSCRIPTION_FEE
@@ -396,9 +419,13 @@ def show():
                                         should_activate = True
 
                                 if should_activate:
-                                    supabase.table('enrollments').update({'enrollment_active': True}).eq('id', enr['id']).execute()
+                                    supabase.table('enrollments').update({'enrollment_active': True}).eq('id', enr_data['id']).execute()
+                                    st.success("✅ Paiement enregistré et inscription activée!")
+                                else:
+                                    st.success("✅ Paiement enregistré avec succès!")
+                            else:
+                                st.success("✅ Paiement enregistré avec succès!")
 
-                            st.success("✅ Paiement enregistré avec succès!")
                             st.rerun()
                         else:
                             st.error("Erreur lors de l'enregistrement du paiement")
@@ -406,4 +433,4 @@ def show():
                     except Exception as e:
                         st.error(f"Erreur : {str(e)}")
                 else:
-                    st.warning("Veuillez sélectionner un étudiant et saisir un montant")
+                    st.warning("Veuillez sélectionner un étudiant, une inscription et saisir un montant")

@@ -9,17 +9,191 @@ def show():
     supabase = get_supabase_client()
 
     # Tabs pour organiser les différentes vues
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "💰 Gestion Caisse",
         "📋 Historique Complet",
         "📈 Statistiques",
-        "💰 Montant Actuel",
+        "💵 Montant Actuel",
         "👥 Par Personne"
     ])
 
     # ============================================
-    # TAB 1: HISTORIQUE COMPLET
+    # TAB 1: GESTION DE CAISSE (NOUVEAU)
     # ============================================
     with tab1:
+        st.subheader("💰 Gestion de la Caisse")
+
+        # Calculer le montant actuel en caisse
+        try:
+            # Récupérer la dernière signature
+            last_signature = supabase.table('cash_register_resets').select('*').order('reset_date', desc=True).limit(1).execute()
+
+            if last_signature.data:
+                last_sig = last_signature.data[0]
+                last_reset_date = last_sig['reset_date']
+                amount_left_last_time = last_sig.get('amount_left', 0) or 0
+
+                # Compter UNIQUEMENT les paiements LIQUIDES depuis la dernière signature
+                payments_since = supabase.table('payments').select('amount').gte('payment_date', last_reset_date).eq('payment_method', 'liquide').execute()
+                payments_total = sum([p['amount'] for p in payments_since.data]) if payments_since.data else 0
+
+                current_amount = amount_left_last_time + payments_total
+            else:
+                # Pas de signature précédente, compter tous les paiements liquides
+                all_payments = supabase.table('payments').select('amount').eq('payment_method', 'liquide').execute()
+                current_amount = sum([p['amount'] for p in all_payments.data]) if all_payments.data else 0
+                last_reset_date = None
+
+            # Afficher le montant actuel
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.metric("💵 Montant Actuel en Caisse (Liquide)", f"{current_amount:,.0f} DA",
+                         help="Montant total des paiements liquides en caisse")
+
+            st.divider()
+
+            # Section: Ajouter un paiement manuel
+            st.markdown("### ➕ Ajouter un Paiement Liquide")
+            st.info("💡 Utilisez ce formulaire pour enregistrer un paiement liquide reçu directement en caisse")
+
+            with st.form("manual_cash_entry"):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    # Sélectionner l'étudiant
+                    students = supabase.table('students').select('*').order('created_at', desc=True).execute()
+                    if students.data:
+                        student_options = {f"{s['first_name']} {s['last_name']} ({s.get('student_code', 'N/A')})": s for s in students.data}
+                        selected_student = st.selectbox("Étudiant *", list(student_options.keys()), key="cash_student")
+
+                        # Sélectionner l'inscription
+                        selected_enrollment = None
+                        enrollment_options = {}
+                        if selected_student:
+                            student_data = student_options[selected_student]
+                            enrollments = supabase.table('enrollments').select('*, groups(name, languages(name))').eq('student_id', student_data['id']).execute()
+
+                            if enrollments.data:
+                                for enr in enrollments.data:
+                                    group = enr.get('groups', {})
+                                    lang_name = group.get('languages', {}).get('name', 'N/A') if group.get('languages') else 'N/A'
+
+                                    # Calculer le solde
+                                    payments = supabase.table('payments').select('amount').eq('enrollment_id', enr['id']).execute()
+                                    total_paid = sum([p['amount'] for p in payments.data]) if payments.data else 0
+                                    remaining = enr['total_course_fee'] - total_paid
+
+                                    status_icon = "✅" if enr['enrollment_active'] else "❌"
+                                    label = f"{group.get('name', 'N/A')} ({lang_name}) - Restant: {remaining:,.0f} DA {status_icon}"
+                                    enrollment_options[label] = enr
+
+                                selected_enrollment = st.selectbox("Inscription *", list(enrollment_options.keys()), key="cash_enrollment")
+                            else:
+                                st.warning("Aucune inscription pour cet étudiant")
+                    else:
+                        st.error("Aucun étudiant disponible")
+                        selected_student = None
+
+                with col2:
+                    amount = st.number_input("Montant (DA) *", min_value=100.0, step=1000.0, key="cash_amount")
+                    receipt_link = st.text_input("Lien du reçu (optionnel)", key="cash_receipt")
+
+                st.markdown("*Les champs marqués d'un astérisque sont obligatoires*")
+
+                submitted = st.form_submit_button("💵 Enregistrer le Paiement Liquide", use_container_width=True)
+
+                if submitted:
+                    if selected_student and selected_enrollment and amount > 0:
+                        try:
+                            student_data = student_options[selected_student]
+                            enr_data = enrollment_options[selected_enrollment]
+
+                            # Enregistrer le paiement LIQUIDE
+                            new_payment = {
+                                'student_id': student_data['id'],
+                                'enrollment_id': enr_data['id'],
+                                'amount': amount,
+                                'payment_method': 'liquide',  # TOUJOURS liquide ici
+                                'receipt_link': receipt_link if receipt_link else None
+                            }
+
+                            response = supabase.table('payments').insert(new_payment).execute()
+
+                            if response.data:
+                                st.success(f"✅ Paiement de {amount:,.0f} DA enregistré en caisse!")
+                                st.rerun()
+                            else:
+                                st.error("Erreur lors de l'enregistrement")
+                        except Exception as e:
+                            st.error(f"Erreur : {str(e)}")
+                    else:
+                        st.warning("Veuillez remplir tous les champs obligatoires")
+
+            st.divider()
+
+            # Section: Signature du comptage
+            st.markdown("### ✍️ Signature du Comptage de Caisse")
+            st.info(f"💵 **Montant actuel en caisse : {current_amount:,.0f} DA**")
+
+            if st.button("✍️ Signer le Comptage", type="primary", use_container_width=True):
+                st.session_state['show_signature_form'] = True
+
+            # Formulaire de signature (modal)
+            if st.session_state.get('show_signature_form', False):
+                with st.form("signature_form"):
+                    st.markdown("#### 📝 Signature de Comptage")
+
+                    # Récupérer le nom de l'utilisateur connecté
+                    current_user = st.session_state.get('user_name', 'Utilisateur')
+                    st.info(f"👤 Signé par : **{current_user}**")
+
+                    st.write(f"💵 **Montant total en caisse : {current_amount:,.0f} DA**")
+
+                    # Combien prélevé
+                    amount_taken = st.number_input("Montant prélevé (DA)", min_value=0.0, max_value=float(current_amount),
+                                                  value=0.0, step=1000.0,
+                                                  help="Combien d'argent retirez-vous de la caisse?")
+
+                    # Calcul automatique de ce qui reste
+                    amount_left = current_amount - amount_taken
+                    st.success(f"💰 **Montant laissé dans la caisse : {amount_left:,.0f} DA**")
+
+                    # Notes
+                    notes = st.text_area("Observations (optionnel)",
+                                        placeholder="Ex: Tout est correct, Dépôt à la banque, Vérification...")
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.form_submit_button("✅ Signer et Confirmer", use_container_width=True):
+                            try:
+                                # Enregistrer la signature
+                                supabase.table('cash_register_resets').insert({
+                                    'reset_date': datetime.now().isoformat(),
+                                    'reset_by': current_user,
+                                    'amount_in_register': current_amount,
+                                    'amount_taken': amount_taken,
+                                    'amount_left': amount_left,
+                                    'notes': notes.strip() if notes.strip() else None
+                                }).execute()
+
+                                st.success("✅ Signature enregistrée avec succès!")
+                                st.session_state['show_signature_form'] = False
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erreur : {str(e)}")
+
+                    with col2:
+                        if st.form_submit_button("❌ Annuler", use_container_width=True):
+                            st.session_state['show_signature_form'] = False
+                            st.rerun()
+
+        except Exception as e:
+            st.error(f"Erreur : {str(e)}")
+
+    # ============================================
+    # TAB 2: HISTORIQUE COMPLET
+    # ============================================
+    with tab2:
         st.subheader("Historique des Signatures de Comptage")
 
         try:
@@ -74,9 +248,9 @@ def show():
             st.error(f"Erreur : {str(e)}")
 
     # ============================================
-    # TAB 2: STATISTIQUES
+    # TAB 3: STATISTIQUES
     # ============================================
-    with tab2:
+    with tab3:
         st.subheader("Statistiques et Analyses")
 
         try:
@@ -193,9 +367,9 @@ def show():
             st.error(f"Erreur : {str(e)}")
 
     # ============================================
-    # TAB 3: MONTANT ACTUEL EN CAISSE
+    # TAB 4: MONTANT ACTUEL EN CAISSE
     # ============================================
-    with tab3:
+    with tab4:
         st.subheader("💰 Montant Actuel en Caisse")
 
         try:
@@ -208,13 +382,13 @@ def show():
                 amount_left_last_time = last_sig.get('amount_left', 0) or 0
                 last_reset_by = last_sig.get('reset_by', 'N/A')
 
-                # Compter les paiements depuis la dernière signature
-                payments_since = supabase.table('payments').select('*').gte('payment_date', last_reset_date).execute()
+                # Compter UNIQUEMENT les paiements LIQUIDES depuis la dernière signature
+                payments_since = supabase.table('payments').select('*').gte('payment_date', last_reset_date).eq('payment_method', 'liquide').execute()
 
                 payments_total = sum([p['amount'] for p in payments_since.data]) if payments_since.data else 0
                 payments_count = len(payments_since.data) if payments_since.data else 0
 
-                # Montant total en caisse
+                # Montant total en caisse (LIQUIDE uniquement)
                 current_amount = amount_left_last_time + payments_total
 
                 # Affichage en grand
@@ -277,9 +451,9 @@ def show():
             st.error(f"Erreur : {str(e)}")
 
     # ============================================
-    # TAB 4: STATISTIQUES PAR PERSONNE
+    # TAB 5: STATISTIQUES PAR PERSONNE
     # ============================================
-    with tab4:
+    with tab5:
         st.subheader("👥 Statistiques par Personne")
 
         try:

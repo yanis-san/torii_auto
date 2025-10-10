@@ -308,7 +308,9 @@ def show():
                                         date = datetime.fromisoformat(date.replace('Z', '+00:00')).strftime('%d/%m/%Y %H:%M')
                                     receipt = payment.get('receipt_link')
                                     receipt_text = f" - [📄 Reçu]({receipt})" if receipt else ""
-                                    st.write(f"- {payment['amount']:,.0f} DA le {date}{receipt_text}")
+                                    # Afficher l'icône de la méthode de paiement
+                                    method_icon = "💵" if payment.get('payment_method') == 'liquide' else "💳"
+                                    st.write(f"- {method_icon} {payment['amount']:,.0f} DA le {date}{receipt_text}")
                             else:
                                 st.warning("Aucun paiement enregistré")
 

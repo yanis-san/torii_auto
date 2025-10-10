@@ -56,25 +56,27 @@ def show():
                 st.markdown(f"# {current_amount:,.0f} DA")
 
             with col_amount2:
-                # Bouton d'initialisation (seulement si montant = 0 et qu'il y a des paiements liquides)
-                all_liquid_payments = supabase.table('payments').select('amount').eq('payment_method', 'liquide').execute()
-                total_liquid = sum([p['amount'] for p in all_liquid_payments.data]) if all_liquid_payments.data else 0
+                # Bouton d'initialisation UNIQUEMENT s'il n'y a JAMAIS eu de signature
+                # (pas même une signature "Système")
+                all_signatures = supabase.table('cash_register_resets').select('id').execute()
+                has_any_signature = len(all_signatures.data) > 0 if all_signatures.data else False
 
-                if current_amount == 0 and total_liquid > 0:
-                    st.warning(f"⚠️ {total_liquid:,.0f} DA de paiements liquides non comptés")
-                    if st.button("🔄 Initialiser", type="secondary", help="Créer un point de départ avec tous les paiements liquides existants"):
+                if not has_any_signature and current_amount > 0:
+                    # Aucune signature n'a jamais été créée, mais il y a des paiements liquides
+                    st.warning(f"⚠️ Initialisation requise")
+                    if st.button("🔄 Initialiser la Caisse", type="secondary", help="Créer le point de départ pour le suivi de caisse"):
                         try:
                             current_user = st.session_state.get('user_name', 'Utilisateur')
                             supabase.table('cash_register_resets').insert({
                                 'reset_date': datetime.now().isoformat(),
                                 'reset_by': current_user,
-                                'amount_in_register': total_liquid,
+                                'amount_in_register': current_amount,
                                 'amount_taken': 0,
-                                'amount_left': total_liquid,
-                                'notes': f"🔄 Initialisation manuelle : {total_liquid:,.0f} DA de paiements liquides existants"
+                                'amount_left': current_amount,
+                                'notes': f"🔄 Initialisation : {current_amount:,.0f} DA de paiements liquides en caisse"
                             }).execute()
 
-                            st.success(f"✅ Caisse initialisée avec {total_liquid:,.0f} DA !")
+                            st.success(f"✅ Caisse initialisée avec {current_amount:,.0f} DA !")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erreur : {str(e)}")

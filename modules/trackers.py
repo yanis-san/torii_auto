@@ -83,33 +83,47 @@ def show():
 
             st.divider()
 
-            # Détails en 2 colonnes
-            col1, col2 = st.columns(2)
+            # Vérifier si la caisse a été initialisée
+            all_signatures = supabase.table('cash_register_resets').select('id').execute()
+            has_any_signature = len(all_signatures.data) > 0 if all_signatures.data else False
 
-            with col1:
-                st.markdown("#### 📝 Dernière Signature")
-                if last_reset_date:
-                    last_date = datetime.fromisoformat(last_reset_date.replace('Z', '+00:00'))
-                    st.write(f"**Date:** {last_date.strftime('%d/%m/%Y à %H:%M')}")
-                    st.write(f"**Signé par:** {last_reset_by}")
-                    st.write(f"**Montant laissé:** {amount_left_last_time:,.0f} DA")
-                else:
-                    st.info("Aucune signature enregistrée")
+            if not has_any_signature:
+                # Caisse non initialisée - afficher seulement le message
+                st.divider()
+                st.info("ℹ️ **La caisse n'a pas encore été initialisée.**")
+                st.write("Cliquez sur le bouton **'🔄 Initialiser la Caisse'** ci-dessus pour créer le point de départ.")
+            else:
+                # Caisse initialisée - afficher les détails normaux
+                st.divider()
 
-            with col2:
-                st.markdown("#### 💳 Nouveaux Paiements Liquides")
-                payments_count = len(payments_since.data) if payments_since.data else 0
-                st.write(f"**Nombre de paiements:** {payments_count}")
-                st.write(f"**Montant total:** {payments_total:,.0f} DA")
+                # Détails en 2 colonnes
+                col1, col2 = st.columns(2)
 
-            st.divider()
+                with col1:
+                    st.markdown("#### 📝 Dernière Signature")
+                    if last_reset_date:
+                        last_date = datetime.fromisoformat(last_reset_date.replace('Z', '+00:00'))
+                        st.write(f"**Date:** {last_date.strftime('%d/%m/%Y à %H:%M')}")
+                        st.write(f"**Signé par:** {last_reset_by}")
+                        st.write(f"**Montant laissé:** {amount_left_last_time:,.0f} DA")
+                    else:
+                        st.info("Aucune signature enregistrée")
 
-            # Section: Signature du comptage
-            st.markdown("### ✍️ Signature du Comptage de Caisse")
-            st.info(f"💵 **Montant actuel en caisse : {current_amount:,.0f} DA**")
+                with col2:
+                    st.markdown("#### 💳 Nouveaux Paiements Liquides")
+                    payments_count = len(payments_since.data) if payments_since.data else 0
+                    payments_total = sum([p['amount'] for p in payments_since.data]) if payments_since.data else 0
+                    st.write(f"**Nombre de paiements:** {payments_count}")
+                    st.write(f"**Montant total:** {payments_total:,.0f} DA")
 
-            if st.button("✍️ Signer le Comptage", type="primary", use_container_width=True):
-                st.session_state['show_signature_form'] = True
+                st.divider()
+
+                # Section: Signature du comptage
+                st.markdown("### ✍️ Signature du Comptage de Caisse")
+                st.info(f"💵 **Montant actuel en caisse : {current_amount:,.0f} DA**")
+
+                if st.button("✍️ Signer le Comptage", type="primary", use_container_width=True):
+                    st.session_state['show_signature_form'] = True
 
             # Formulaire de signature (modal)
             if st.session_state.get('show_signature_form', False):
@@ -343,7 +357,8 @@ def show():
                 # Section: Signatures récentes (7 derniers jours)
                 st.markdown("### 📅 Signatures Récentes (7 derniers jours)")
 
-                seven_days_ago = datetime.now() - timedelta(days=7)
+                from datetime import timezone
+                seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
                 recent_sigs = [sig for sig in signatures.data
                               if datetime.fromisoformat(sig['reset_date'].replace('Z', '+00:00')) >= seven_days_ago]
 
@@ -469,13 +484,21 @@ def show():
                             'count': 0,
                             'total_taken': 0,
                             'total_in_register': 0,
-                            'amounts_taken': []
+                            'amounts_taken': [],
+                            'last_amount': 0,
+                            'last_date': None
                         }
 
                     stats_by_person[person]['count'] += 1
                     stats_by_person[person]['total_taken'] += sig['amount_taken']
                     stats_by_person[person]['total_in_register'] += sig['amount_in_register']
                     stats_by_person[person]['amounts_taken'].append(sig['amount_taken'])
+
+                    # Garder le dernier prélèvement (la première signature dans la liste car order desc)
+                    sig_date = datetime.fromisoformat(sig['reset_date'].replace('Z', '+00:00'))
+                    if stats_by_person[person]['last_date'] is None or sig_date > stats_by_person[person]['last_date']:
+                        stats_by_person[person]['last_amount'] = sig['amount_taken']
+                        stats_by_person[person]['last_date'] = sig_date
 
                 # Créer le DataFrame
                 person_data = []
@@ -484,7 +507,7 @@ def show():
                         'Personne': person,
                         'Nombre de Signatures': stats['count'],
                         'Total Prélevé': f"{stats['total_taken']:,.0f} DA",
-                        'Moyenne par Signature': f"{stats['total_taken'] / stats['count']:,.0f} DA",
+                        'Dernier Prélèvement': f"{stats['last_amount']:,.0f} DA",
                         'Min Prélevé': f"{min(stats['amounts_taken']):,.0f} DA",
                         'Max Prélevé': f"{max(stats['amounts_taken']):,.0f} DA"
                     })

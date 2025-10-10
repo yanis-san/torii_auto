@@ -211,8 +211,10 @@ def show():
             level = st.number_input("Niveau *", min_value=1, value=1)
 
             # Calculer automatiquement les frais
-            if selected_group:
+            if selected_group and selected_student:
                 group_data = group_options[selected_group]
+                student_data = student_options[selected_student]
+
                 lang_name = group_data['languages']['name'] if group_data.get('languages') else 'Japonais'
                 mode = group_data['mode']
                 duration = group_data['duration_months']
@@ -223,11 +225,22 @@ def show():
                 else:
                     course_fee = calculate_course_fee(lang_name, mode, duration)
 
-                total_fee = course_fee + INSCRIPTION_FEE
+                # Vérifier si l'étudiant a déjà payé les frais d'inscription cette année
+                registration_fee_paid = student_data.get('registration_fee_paid', False)
+
+                if registration_fee_paid:
+                    total_fee = course_fee
+                    st.success(f"✅ Frais d'inscription déjà payés pour cette année académique")
+                else:
+                    total_fee = course_fee + INSCRIPTION_FEE
+                    st.info(f"ℹ️ Frais d'inscription (1000 DA) à ajouter au premier paiement")
 
                 # Affichage du total avec détail des mensualités
                 monthly_fee = course_fee / duration
-                st.info(f"**Frais de cours:** {course_fee:,.0f} DA + **Frais d'inscription:** {INSCRIPTION_FEE:,.0f} DA = **Total:** {total_fee:,.0f} DA")
+                if registration_fee_paid:
+                    st.info(f"**Frais de cours:** {course_fee:,.0f} DA = **Total:** {total_fee:,.0f} DA")
+                else:
+                    st.info(f"**Frais de cours:** {course_fee:,.0f} DA + **Frais d'inscription:** {INSCRIPTION_FEE:,.0f} DA = **Total:** {total_fee:,.0f} DA")
 
                 if 'group' in mode:
                     st.caption(f"💡 Paiement échelonné possible : {monthly_fee:,.0f} DA/mois sur {duration} mois")
@@ -302,6 +315,12 @@ def show():
                             pay_response = supabase.table('payments').insert(new_payment).execute()
 
                             if pay_response.data:
+                                # Marquer les frais d'inscription comme payés si montant ≥ 1000 DA
+                                if not registration_fee_paid and payment_amount >= INSCRIPTION_FEE:
+                                    supabase.table('students').update({
+                                        'registration_fee_paid': True
+                                    }).eq('id', student_data['id']).execute()
+
                                 status_msg = "activée" if enrollment_active else "créée (paiement insuffisant pour activation)"
                                 st.success(f"✅ Inscription {status_msg} avec succès!")
                                 st.rerun()
@@ -394,6 +413,12 @@ def show():
                         response = supabase.table('payments').insert(new_payment).execute()
 
                         if response.data:
+                            # Marquer les frais d'inscription comme payés si montant ≥ 1000 DA et pas encore payés
+                            if not student_data.get('registration_fee_paid', False) and amount >= INSCRIPTION_FEE:
+                                supabase.table('students').update({
+                                    'registration_fee_paid': True
+                                }).eq('id', student_data['id']).execute()
+
                             # Vérifier si on doit activer cette inscription
                             if not enr_data['enrollment_active']:
                                 # Recalculer le total payé pour cette inscription

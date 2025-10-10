@@ -50,7 +50,34 @@ def show():
 
             # Affichage en grand du montant
             st.markdown("### 💵 Montant Actuel en Caisse")
-            st.markdown(f"# {current_amount:,.0f} DA")
+
+            col_amount1, col_amount2 = st.columns([3, 1])
+            with col_amount1:
+                st.markdown(f"# {current_amount:,.0f} DA")
+
+            with col_amount2:
+                # Bouton d'initialisation (seulement si montant = 0 et qu'il y a des paiements liquides)
+                all_liquid_payments = supabase.table('payments').select('amount').eq('payment_method', 'liquide').execute()
+                total_liquid = sum([p['amount'] for p in all_liquid_payments.data]) if all_liquid_payments.data else 0
+
+                if current_amount == 0 and total_liquid > 0:
+                    st.warning(f"⚠️ {total_liquid:,.0f} DA de paiements liquides non comptés")
+                    if st.button("🔄 Initialiser", type="secondary", help="Créer un point de départ avec tous les paiements liquides existants"):
+                        try:
+                            current_user = st.session_state.get('user_name', 'Utilisateur')
+                            supabase.table('cash_register_resets').insert({
+                                'reset_date': datetime.now().isoformat(),
+                                'reset_by': current_user,
+                                'amount_in_register': total_liquid,
+                                'amount_taken': 0,
+                                'amount_left': total_liquid,
+                                'notes': f"🔄 Initialisation manuelle : {total_liquid:,.0f} DA de paiements liquides existants"
+                            }).execute()
+
+                            st.success(f"✅ Caisse initialisée avec {total_liquid:,.0f} DA !")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erreur : {str(e)}")
 
             st.divider()
 

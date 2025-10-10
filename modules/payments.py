@@ -321,18 +321,18 @@ def show():
                 if 'individual' in mode and 'online' in mode:
                     # Cours individuels en ligne : paiement intégral requis
                     st.warning("⚠️ Les cours en ligne individuels nécessitent un paiement intégral pour activer l'inscription.")
-                    min_payment = total_fee
+                    min_payment = float(total_fee)
                     payment_amount = st.number_input(f"Montant du premier paiement (minimum {min_payment:,.0f} DA) *",
                                                      min_value=min_payment, value=min_payment, step=1000.0)
                 else:
                     # Cours en groupe ou individuels présentiels : paiement flexible
                     if registration_fee_paid:
                         # Pas de frais d'inscription à payer, minimum = une mensualité
-                        min_payment = monthly_fee
+                        min_payment = float(monthly_fee)
                         st.info(f"💡 Paiement en 1, 2 ou 3 fois possible. Minimum {min_payment:,.0f} DA.")
                     else:
                         # Frais d'inscription requis au premier paiement
-                        min_payment = INSCRIPTION_FEE
+                        min_payment = float(INSCRIPTION_FEE)
                         st.info(f"💡 Paiement en 1, 2 ou 3 fois possible. Le premier paiement doit être au minimum {INSCRIPTION_FEE:,.0f} DA (frais d'inscription).")
 
                     payment_amount = st.number_input(f"Montant du premier paiement (minimum {min_payment:,.0f} DA) *",

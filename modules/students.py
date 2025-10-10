@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils import get_supabase_client
+from utils import get_supabase_client, get_current_academic_year
 from datetime import datetime
 
 def show():
@@ -8,18 +8,27 @@ def show():
 
     supabase = get_supabase_client()
 
+    # Récupérer l'année académique actuelle
+    current_year = get_current_academic_year()
+    if not current_year:
+        st.error("⚠️ Aucune année académique active trouvée dans Supabase. Veuillez configurer une année académique.")
+        st.stop()
+
     tab1, tab2, tab3 = st.tabs(["📋 Liste", "➕ Ajouter", "🔍 Rechercher"])
 
     with tab1:
         st.subheader("Liste des Étudiants")
 
         try:
-            students_response = supabase.table('students').select('*').order('created_at', desc=True).execute()
+            students_response = supabase.table('students').select('*, academic_years(year_label, prefix)').order('created_at', desc=True).execute()
 
             if students_response.data:
                 students_list = []
                 for student in students_response.data:
                     id_doc_link = student.get('id_document_link')
+                    academic_year = student.get('academic_years', {})
+                    year_label = academic_year.get('year_label', 'N/A') if academic_year else 'N/A'
+
                     students_list.append({
                         'ID': student['id'],
                         'Code': student.get('student_code', 'N/A'),
@@ -29,8 +38,7 @@ def show():
                         'Téléphone': student.get('phone_number', 'N/A'),
                         'Pièce ID': id_doc_link if id_doc_link else 'N/A',
                         'Date de naissance': student.get('birth_date', 'N/A'),
-                        'Année': student['year_short'],
-                        'Numéro': student.get('number', 'N/A'),
+                        'Année académique': year_label,
                         'Créé le': student.get('created_at', 'N/A')
                     })
 
@@ -49,9 +57,10 @@ def show():
                 with col1:
                     st.metric("Total Étudiants", len(students_list))
                 with col2:
-                    current_year = datetime.now().year % 100
-                    current_year_students = [s for s in students_response.data if s['year_short'] == current_year]
-                    st.metric(f"Étudiants {current_year}", len(current_year_students))
+                    # Compter les étudiants de l'année académique actuelle
+                    current_year_students = [s for s in students_response.data
+                                           if s.get('academic_year_id') == current_year['id']]
+                    st.metric(f"Étudiants {current_year['year_label']}", len(current_year_students))
                 with col3:
                     # Compter les inscriptions actives
                     enrollments = supabase.table('enrollments').select('*', count='exact').eq('enrollment_active', True).execute()
@@ -64,6 +73,9 @@ def show():
 
     with tab2:
         st.subheader("Ajouter un Nouvel Étudiant")
+
+        # Afficher l'année académique en cours
+        st.info(f"📅 Année académique en cours : **{current_year['year_label']}** (Préfixe : {current_year['prefix']})")
 
         with st.form("add_student_form"):
             col1, col2 = st.columns(2)
@@ -82,11 +94,9 @@ def show():
                     min_value=datetime(1940, 1, 1),
                     max_value=datetime.now()
                 )
-                current_year = datetime.now().year % 100
-                year_short = st.number_input("Année (format court, ex: 26 pour 2026)",
-                                            min_value=20, max_value=99, value=current_year)
 
             st.markdown("*Les champs marqués d'un astérisque sont obligatoires*")
+            st.markdown(f"*Le code étudiant sera automatiquement généré avec le préfixe **{current_year['prefix']}***")
 
             submitted = st.form_submit_button("Ajouter l'étudiant", width="stretch")
 
@@ -106,7 +116,7 @@ def show():
                                 'email': email,
                                 'phone_number': phone_number if phone_number else None,
                                 'id_document_link': id_document_link if id_document_link else None,
-                                'year_short': year_short,
+                                'academic_year_id': current_year['id'],
                                 'birth_date': birth_date.isoformat() if birth_date else None
                             }
 
@@ -131,7 +141,7 @@ def show():
         if search_term:
             try:
                 # Recherche multiple
-                students = supabase.table('students').select('*').execute()
+                students = supabase.table('students').select('*, academic_years(year_label, prefix)').execute()
 
                 if students.data:
                     filtered = [
@@ -159,8 +169,9 @@ def show():
                                     st.write(f"**Date de naissance:** {student.get('birth_date', 'N/A')}")
 
                                 with col2:
-                                    st.write(f"**Année:** {student['year_short']}")
-                                    st.write(f"**Numéro:** {student.get('number', 'N/A')}")
+                                    academic_year = student.get('academic_years', {})
+                                    year_label = academic_year.get('year_label', 'N/A') if academic_year else 'N/A'
+                                    st.write(f"**Année académique:** {year_label}")
                                     st.write(f"**Créé le:** {student.get('created_at', 'N/A')}")
 
                                 st.divider()

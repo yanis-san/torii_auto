@@ -1,6 +1,6 @@
 import streamlit as st
 from auth import init_session_state, sign_out
-from modules import auth_pages, dashboard, students, teachers, classrooms, groups, payments, schedule, attendance, profile
+from modules import auth_pages, dashboard, students, teachers, classrooms, groups, payments, schedule, attendance, profile, trackers
 
 # Configuration de la page
 st.set_page_config(
@@ -54,6 +54,7 @@ else:
                     "📊 Dashboard",
                     "👥 Étudiants",
                     "💰 Paiements",
+                    "📈 Suivi de Caisse",
                     "📚 Groupes",
                     "👨‍🏫 Enseignants",
                     "🏫 Salles",
@@ -94,6 +95,8 @@ else:
             students.show()
         elif page == "💰 Paiements":
             payments.show()
+        elif page == "📈 Suivi de Caisse":
+            trackers.show()
         elif page == "📚 Groupes":
             groups.show()
         elif page == "👨‍🏫 Enseignants":

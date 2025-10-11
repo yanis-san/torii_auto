@@ -282,6 +282,9 @@ def show():
 
             level = st.number_input("Niveau *", min_value=1, value=1)
 
+            # Option pour override manuel
+            manual_override = st.checkbox("⚙️ Ajuster le montant manuellement", help="Cochez cette case pour modifier le montant calculé automatiquement")
+
             # Calculer automatiquement les frais
             if selected_group and selected_student:
                 group_data = group_options[selected_group]
@@ -303,15 +306,37 @@ def show():
                 if registration_fee_paid:
                     # Frais d'inscription déjà payés cette année académique
                     total_fee = course_fee
-                    st.success(f"✅ Frais d'inscription déjà payés pour cette année académique")
-                    st.info(f"**Frais de cours:** {course_fee:,.0f} DA = **Total:** {total_fee:,.0f} DA")
+                    if not manual_override:
+                        st.success(f"✅ Frais d'inscription déjà payés pour cette année académique")
+                        st.info(f"**Frais de cours:** {course_fee:,.0f} DA = **Total:** {total_fee:,.0f} DA")
                 else:
                     # Premier enrollment de l'année : inclure les frais d'inscription
                     total_fee = course_fee + INSCRIPTION_FEE
-                    st.info(f"**Frais de cours:** {course_fee:,.0f} DA + **Frais d'inscription:** {INSCRIPTION_FEE:,.0f} DA = **Total:** {total_fee:,.0f} DA")
+                    if not manual_override:
+                        st.info(f"**Frais de cours:** {course_fee:,.0f} DA + **Frais d'inscription:** {INSCRIPTION_FEE:,.0f} DA = **Total:** {total_fee:,.0f} DA")
+
+                # Si override manuel activé, permettre la modification
+                if manual_override:
+                    st.warning("⚠️ Mode manuel activé - vous pouvez modifier le montant total")
+                    total_fee = st.number_input(
+                        "Montant total du cours (DA) *",
+                        min_value=float(INSCRIPTION_FEE if not registration_fee_paid else 0),
+                        value=float(total_fee),
+                        step=1000.0,
+                        help="Montant total incluant les frais d'inscription si nécessaire"
+                    )
+                    if registration_fee_paid:
+                        st.info(f"**Montant personnalisé:** {total_fee:,.0f} DA (frais d'inscription déjà payés)")
+                    else:
+                        st.info(f"**Montant personnalisé:** {total_fee:,.0f} DA (incluant frais d'inscription)")
+                    # Recalculer la durée effective pour l'affichage
+                    course_fee_only = total_fee - (INSCRIPTION_FEE if not registration_fee_paid else 0)
+                    monthly_fee = course_fee_only / duration if duration > 0 else 0
+                else:
+                    course_fee_only = course_fee
+                    monthly_fee = course_fee / duration
 
                 # Calcul de la mensualité pour info
-                monthly_fee = course_fee / duration
                 if registration_fee_paid:
                     st.caption(f"💡 Paiement échelonné possible : environ {monthly_fee:,.0f} DA/mois sur {duration} mois")
                 else:

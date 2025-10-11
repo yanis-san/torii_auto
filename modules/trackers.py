@@ -3,10 +3,6 @@ import pandas as pd
 from utils import get_supabase_client
 from datetime import datetime, timedelta
 
-def get_algeria_time():
-    """Retourne l'heure actuelle en Algérie (UTC+1)"""
-    return datetime.now() + timedelta(hours=1)
-
 def show():
     st.title("📊 Suivi de Caisse")
 
@@ -71,8 +67,8 @@ def show():
                     if st.button("🔄 Initialiser la Caisse", type="secondary", help="Créer le point de départ pour le suivi de caisse"):
                         try:
                             current_user = st.session_state.get('user_name', 'Utilisateur')
+                            # Ne pas spécifier reset_date, la base utilisera algeria_now() par défaut
                             supabase.table('cash_register_resets').insert({
-                                'reset_date': get_algeria_time().isoformat(),
                                 'reset_by': current_user,
                                 'amount_in_register': current_amount,
                                 'amount_taken': 0,
@@ -157,9 +153,8 @@ def show():
                     with col1:
                         if st.form_submit_button("✅ Signer et Confirmer", use_container_width=True):
                             try:
-                                # Enregistrer la signature avec l'heure algérienne
+                                # Ne pas spécifier reset_date, la base utilisera algeria_now() par défaut
                                 supabase.table('cash_register_resets').insert({
-                                    'reset_date': get_algeria_time().isoformat(),
                                     'reset_by': current_user,
                                     'amount_in_register': current_amount,
                                     'amount_taken': amount_taken,
@@ -361,8 +356,8 @@ def show():
                 # Section: Signatures récentes (7 derniers jours)
                 st.markdown("### 📅 Signatures Récentes (7 derniers jours)")
 
-                # Comparer avec l'heure algérienne
-                seven_days_ago = get_algeria_time() - timedelta(days=7)
+                # Comparer avec la date actuelle
+                seven_days_ago = datetime.now() - timedelta(days=7)
                 recent_sigs = [sig for sig in signatures.data
                               if datetime.fromisoformat(sig['reset_date'].replace('Z', '+00:00')) >= seven_days_ago]
 

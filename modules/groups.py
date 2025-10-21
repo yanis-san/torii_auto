@@ -70,6 +70,21 @@ def show():
                             if group.get('start_date'):
                                 st.write(f"**Date de début:** {group['start_date']}")
 
+                            # Afficher et modifier la tarification
+                            is_old = group.get('is_old_pricing', False)
+                            tarif_actuel = "OLD (ancienne tarification)" if is_old else "NEW (nouvelle tarification)"
+                            st.write(f"**Tarification:** {tarif_actuel}")
+
+                            # Bouton pour basculer la tarification
+                            nouveau_tarif = "NEW" if is_old else "OLD"
+                            if st.button(f"Passer en tarif {nouveau_tarif}", key=f"toggle_pricing_{group['id']}"):
+                                try:
+                                    supabase.table('groups').update({'is_old_pricing': not is_old}).eq('id', group['id']).execute()
+                                    st.success(f"Tarification changée en {nouveau_tarif}")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erreur : {str(e)}")
+
                             # Afficher les enseignants
                             group_teachers = supabase.table('group_teacher').select('*, teachers(first_name, last_name, email)').eq('group_id', group['id']).execute()
 

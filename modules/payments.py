@@ -3,43 +3,50 @@ import pandas as pd
 from utils import get_supabase_client
 from datetime import datetime
 
-# Tarifs des cours
+# Tarifs des cours - Structure simplifiée
+# is_old_pricing du groupe détermine si on utilise OLD ou NEW
 COURSE_FEES = {
     'Japonais': {
-        # Anciens tarifs
-        'online_group_old': 12000,
-        'online_individual_old': 1500,  # par heure
-        'presential_group_old': 12000,
-        'presential_individual_old': 1500,  # par heure
-        # Nouveaux tarifs
-        'online_group': 16000,
-        'online_individual': 2000,  # par heure
-        'presential_group': 16000,
-        'presential_individual': 2000  # par heure
+        'OLD': {
+            'online_group': 12000,
+            'online_individual': 1500,  # par heure
+            'presential_group': 12000,
+            'presential_individual': 1500  # par heure
+        },
+        'NEW': {
+            'online_group': 16000,
+            'online_individual': 2000,  # par heure
+            'presential_group': 16000,
+            'presential_individual': 2000  # par heure
+        }
     },
     'Chinois': {
-        # Anciens tarifs
-        'online_group_old': 15000,
-        'online_individual_old': 2000,
-        'presential_group_old': 15000,
-        'presential_individual_old': 2000,
-        # Nouveaux tarifs
-        'online_group': 20000,
-        'online_individual': 3000,
-        'presential_group': 20000,
-        'presential_individual': 3000
+        'OLD': {
+            'online_group': 15000,
+            'online_individual': 2000,
+            'presential_group': 15000,
+            'presential_individual': 2000
+        },
+        'NEW': {
+            'online_group': 20000,
+            'online_individual': 3000,
+            'presential_group': 20000,
+            'presential_individual': 3000
+        }
     },
     'Coréen': {
-        # Anciens tarifs
-        'online_group_old': 16000,
-        'online_individual_old': 1500,
-        'presential_group_old': 16000,
-        'presential_individual_old': 1500,
-        # Nouveaux tarifs
-        'online_group': 15000,
-        'online_individual': 2000,
-        'presential_group': 15000,
-        'presential_individual': 2000
+        'OLD': {
+            'online_group': 16000,
+            'online_individual': 1500,
+            'presential_group': 16000,
+            'presential_individual': 1500
+        },
+        'NEW': {
+            'online_group': 15000,
+            'online_individual': 2000,
+            'presential_group': 15000,
+            'presential_individual': 2000
+        }
     }
 }
 
@@ -66,18 +73,42 @@ def mark_registration_fee_as_paid(supabase, student_id):
     """
     supabase.table('students').update({'registration_fee_paid': True}).eq('id', student_id).execute()
 
-def calculate_course_fee(language, mode, duration_months=3, hours=10):
-    """Calcule les frais de cours selon la langue et le mode"""
+def calculate_course_fee(language, mode, is_old_pricing=False, hours=10):
+    """
+    Calcule les frais de cours selon la langue, le mode et la tarification.
+
+    Args:
+        language: Nom de la langue (Japonais, Chinois, Coréen)
+        mode: Mode du cours (online_group, online_individual, presential_group, presential_individual)
+        is_old_pricing: True pour ancienne tarification, False pour nouvelle
+        hours: Nombre d'heures (uniquement pour cours individuels)
+
+    Returns:
+        float: Montant du cours en DA
+    """
     if language not in COURSE_FEES:
         return 0
 
-    if 'individual' in mode:
+    # Déterminer la tarification
+    pricing_type = 'OLD' if is_old_pricing else 'NEW'
+
+    # Nettoyer le mode (enlever _old si présent pour compatibilité)
+    clean_mode = mode.replace('_old', '')
+
+    if pricing_type not in COURSE_FEES[language]:
+        return 0
+
+    if clean_mode not in COURSE_FEES[language][pricing_type]:
+        return 0
+
+    base_price = COURSE_FEES[language][pricing_type][clean_mode]
+
+    if 'individual' in clean_mode:
         # Pour les cours individuels, on calcule par heure
-        return COURSE_FEES[language][mode] * hours
+        return base_price * hours
     else:
-        # Pour les cours en groupe, tarif total (non multiplié par la durée)
-        # Le tarif dans COURSE_FEES représente déjà le prix total de la formation
-        return COURSE_FEES[language][mode]
+        # Pour les cours en groupe, tarif total
+        return base_price
 
 def show():
     st.title("💰 Gestion des Paiements")
@@ -271,7 +302,12 @@ def show():
             try:
                 groups = supabase.table('groups').select('*, languages(name)').execute()
                 if groups.data:
-                    group_options = {f"{g['name']} ({g['languages']['name'] if g.get('languages') else 'N/A'}, {g['mode']})": g for g in groups.data}
+                    group_options = {}
+                    for g in groups.data:
+                        lang_name = g['languages']['name'] if g.get('languages') else 'N/A'
+                        tarif = "OLD" if g.get('is_old_pricing', False) else "NEW"
+                        label = f"{g['name']} ({lang_name}, {tarif})"
+                        group_options[label] = g
                     selected_group = st.selectbox("Groupe *", list(group_options.keys()))
                 else:
                     st.error("Aucun groupe disponible")
@@ -301,79 +337,71 @@ def show():
                 lang_name = group_data['languages']['name'] if group_data.get('languages') else 'Japonais'
                 mode = group_data['mode']
                 duration = group_data['duration_months']
+                is_old_pricing = group_data.get('is_old_pricing', False)
 
+                # Calculer le prix du cours selon la tarification du groupe
                 if 'individual' in mode:
                     hours = st.number_input("Nombre d'heures", min_value=1, value=10, key=f"hours_{form_key}")
-                    course_fee = calculate_course_fee(lang_name, mode, duration, hours)
+                    course_fee = calculate_course_fee(lang_name, mode, is_old_pricing, hours)
                 else:
-                    course_fee = calculate_course_fee(lang_name, mode, duration)
+                    course_fee = calculate_course_fee(lang_name, mode, is_old_pricing)
 
-                # LOGIQUE CORRECTE : Vérifier si les frais d'inscription ont déjà été payés cette année
+                # Vérifier si les frais d'inscription ont déjà été payés cette année
                 registration_fee_paid = get_student_registration_status(supabase, student_data['id'])
 
+                # Calculer le montant total
                 if registration_fee_paid:
-                    # Frais d'inscription déjà payés cette année académique
                     total_fee_calculated = course_fee
                     st.success(f"✅ Frais d'inscription déjà payés pour cette année académique")
-                    st.info(f"**Frais de cours:** {course_fee:,.0f} DA = **Total calculé:** {total_fee_calculated:,.0f} DA")
+                    st.info(f"**Prix du cours:** {course_fee:,.0f} DA")
                 else:
-                    # Premier enrollment de l'année : inclure les frais d'inscription
                     total_fee_calculated = course_fee + INSCRIPTION_FEE
-                    st.info(f"**Frais de cours:** {course_fee:,.0f} DA + **Frais d'inscription:** {INSCRIPTION_FEE:,.0f} DA = **Total calculé:** {total_fee_calculated:,.0f} DA")
+                    st.info(f"**Prix du cours:** {course_fee:,.0f} DA + **Frais d'inscription:** {INSCRIPTION_FEE:,.0f} DA = **{total_fee_calculated:,.0f} DA**")
 
                 # Champ de montant total TOUJOURS éditable
                 st.divider()
                 st.markdown("**💰 Montant Total du Cours**")
                 total_fee = st.number_input(
                     "Montant total (DA) *",
-                    min_value=float(INSCRIPTION_FEE if not registration_fee_paid else 0),
+                    min_value=0.0,
                     value=float(total_fee_calculated),
                     step=1000.0,
-                    help="Vous pouvez modifier ce montant si nécessaire (ex: tarif différent du groupe)",
+                    help="Vous pouvez modifier ce montant si nécessaire (ex: tarif spécial)",
                     key=f"total_fee_input_{form_key}"
                 )
 
-                # Afficher un avertissement si le montant a été modifié
+                # Avertir si le montant a été modifié
                 if total_fee != total_fee_calculated:
                     st.warning(f"⚠️ Montant modifié : {total_fee:,.0f} DA (au lieu de {total_fee_calculated:,.0f} DA)")
 
-                # Calcul de la mensualité pour info
-                course_fee_only = total_fee - (INSCRIPTION_FEE if not registration_fee_paid else 0)
-                monthly_fee = course_fee_only / duration if duration > 0 else 0
+                # Champ du montant du premier paiement - SIMPLIFIÉ
+                st.divider()
+                st.markdown("**💳 Premier Paiement**")
 
-                # Debug
-                st.write(f"**DEBUG:** total_fee={total_fee}, course_fee_only={course_fee_only}, monthly_fee={monthly_fee}, registration_fee_paid={registration_fee_paid}")
-
-                if registration_fee_paid:
-                    st.caption(f"💡 Paiement échelonné possible : environ {monthly_fee:,.0f} DA/mois sur {duration} mois")
-                else:
-                    st.caption(f"💡 Paiement échelonné possible : environ {monthly_fee:,.0f} DA/mois sur {duration} mois (+ frais d'inscription au 1er paiement)")
-
-                # Règles de paiement selon le type de cours
+                # Cours individuels en ligne : paiement intégral obligatoire
                 if 'individual' in mode and 'online' in mode:
-                    # Cours individuels en ligne : paiement intégral requis
-                    st.warning("⚠️ Les cours en ligne individuels nécessitent un paiement intégral pour activer l'inscription.")
-                    min_payment = float(total_fee)
-                    st.write(f"**DEBUG:** Mode individual+online, min_payment={min_payment}")
-                    payment_amount = st.number_input(f"Montant du premier paiement (minimum {min_payment:,.0f} DA) *",
-                                                     min_value=min_payment, value=min_payment, step=1000.0, key=f"payment_amount_{form_key}")
+                    st.warning("⚠️ Paiement intégral requis pour les cours individuels en ligne")
+                    payment_amount = st.number_input(
+                        "Montant du premier paiement (DA) *",
+                        min_value=float(total_fee),
+                        value=float(total_fee),
+                        step=1000.0,
+                        key=f"payment_amount_{form_key}",
+                        help="Le montant total doit être payé pour activer l'inscription"
+                    )
                 else:
-                    # Cours en groupe ou individuels présentiels : paiement flexible
-                    if registration_fee_paid:
-                        # Pas de frais d'inscription à payer, minimum = une mensualité
-                        min_payment = float(monthly_fee)
-                        st.info(f"💡 Paiement en 1, 2 ou 3 fois possible. Minimum {min_payment:,.0f} DA.")
-                        st.write(f"**DEBUG:** Frais déjà payés, min_payment (mensualité)={min_payment}")
-                    else:
-                        # Frais d'inscription requis au premier paiement
-                        min_payment = float(INSCRIPTION_FEE)
-                        st.info(f"💡 Paiement en 1, 2 ou 3 fois possible. Le premier paiement doit être au minimum {INSCRIPTION_FEE:,.0f} DA (frais d'inscription).")
-                        st.write(f"**DEBUG:** Frais PAS payés, min_payment (frais inscription)={min_payment}")
+                    # Autres cours : paiement flexible
+                    if not registration_fee_paid:
+                        st.info(f"💡 Le premier paiement doit inclure les frais d'inscription ({INSCRIPTION_FEE:,.0f} DA)")
 
-                    payment_amount = st.number_input(f"Montant du premier paiement (minimum {min_payment:,.0f} DA) *",
-                                                     min_value=min_payment, value=min_payment, step=1000.0, key=f"payment_amount_{form_key}")
-
-                st.write(f"**DEBUG:** payment_amount final (widget)={payment_amount}")
+                    payment_amount = st.number_input(
+                        "Montant du premier paiement (DA) *",
+                        min_value=0.0,
+                        value=float(total_fee),  # Par défaut : paiement complet
+                        step=1000.0,
+                        key=f"payment_amount_{form_key}",
+                        help="Vous pouvez payer en plusieurs fois"
+                    )
 
                 # Méthode de paiement
                 payment_method = st.selectbox(
@@ -397,9 +425,6 @@ def show():
                     try:
                         student_data = student_options[selected_student]
                         group_data = group_options[selected_group]
-
-                        # Debug au moment du submit
-                        st.write(f"🔍 **DEBUG SUBMIT:** total_fee={total_fee}, payment_amount={payment_amount}, level={level}")
 
                         # Vérifier les conditions d'activation
                         mode = group_data['mode']

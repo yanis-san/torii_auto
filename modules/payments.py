@@ -394,6 +394,8 @@ def show():
                 payment_amount = 0
                 registration_fee_paid = False
                 payment_method = "💵 Liquide"
+                use_old_pricing = False
+                hours = 10
 
             st.markdown("*Les champs marqués d'un astérisque sont obligatoires*")
 
@@ -405,8 +407,23 @@ def show():
                         student_data = student_options[selected_student]
                         group_data = group_options[selected_group]
 
-                        # Vérifier les conditions d'activation
+                        # RECALCULER total_fee au moment du submit avec les vraies valeurs
+                        # (car dans un formulaire Streamlit, les variables ne se mettent pas à jour dynamiquement)
+                        lang_name = group_data['languages']['name'] if group_data.get('languages') else 'Japonais'
                         mode = group_data['mode']
+                        duration = group_data['duration_months']
+
+                        # Utiliser use_old_pricing et hours capturés au submit
+                        if 'individual' in mode:
+                            course_fee = calculate_course_fee(lang_name, mode, use_old_pricing, hours)
+                        else:
+                            course_fee = calculate_course_fee(lang_name, mode, use_old_pricing)
+
+                        # Recalculer total_fee avec le bon course_fee
+                        registration_fee_paid_submit = get_student_registration_status(supabase, student_data['id'])
+                        total_fee = course_fee + (0 if registration_fee_paid_submit else INSCRIPTION_FEE)
+
+                        # Vérifier les conditions d'activation
                         enrollment_active = False
 
                         if 'individual' in mode and 'online' in mode:
@@ -415,7 +432,7 @@ def show():
                                 enrollment_active = True
                         else:
                             # Pour les autres cours
-                            if registration_fee_paid:
+                            if registration_fee_paid_submit:
                                 # Frais d'inscription déjà payés : activer dès qu'il y a un paiement
                                 enrollment_active = True
                             else:
@@ -451,7 +468,7 @@ def show():
 
                             if pay_response.data:
                                 # Si c'est le premier enrollment et paiement >= 1000 DA, marquer les frais comme payés
-                                if not registration_fee_paid and payment_amount >= INSCRIPTION_FEE:
+                                if not registration_fee_paid_submit and payment_amount >= INSCRIPTION_FEE:
                                     mark_registration_fee_as_paid(supabase, student_data['id'])
 
                                 status_msg = "activée" if enrollment_active else "créée (paiement insuffisant pour activation)"

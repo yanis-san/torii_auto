@@ -337,44 +337,46 @@ def show():
                 lang_name = group_data['languages']['name'] if group_data.get('languages') else 'Japonais'
                 mode = group_data['mode']
                 duration = group_data['duration_months']
-                is_old_pricing = group_data.get('is_old_pricing', False)
+                group_is_old_pricing = group_data.get('is_old_pricing', False)
 
-                # Calculer le prix du cours selon la tarification du groupe
+                # Checkbox pour appliquer l'ancienne tarification pour cet étudiant spécifiquement
+                st.divider()
+                use_old_pricing = st.checkbox(
+                    "Appliquer l'ancienne tarification (OLD) pour cet étudiant",
+                    value=group_is_old_pricing,  # Par défaut = tarif du groupe
+                    key=f"use_old_pricing_{form_key}",
+                    help="Cochez pour appliquer les anciens tarifs à cet étudiant, même si le groupe est en nouvelle tarification"
+                )
+
+                # Calculer le prix du cours selon le choix de tarification
                 if 'individual' in mode:
                     hours = st.number_input("Nombre d'heures", min_value=1, value=10, key=f"hours_{form_key}")
-                    course_fee = calculate_course_fee(lang_name, mode, is_old_pricing, hours)
+                    course_fee = calculate_course_fee(lang_name, mode, use_old_pricing, hours)
                 else:
-                    course_fee = calculate_course_fee(lang_name, mode, is_old_pricing)
+                    course_fee = calculate_course_fee(lang_name, mode, use_old_pricing)
 
                 # Vérifier si les frais d'inscription ont déjà été payés cette année
                 registration_fee_paid = get_student_registration_status(supabase, student_data['id'])
 
                 # Calculer le montant total
+                total_fee = course_fee + (0 if registration_fee_paid else INSCRIPTION_FEE)
+
+                # Afficher le récapitulatif
+                st.divider()
+                st.markdown("**💰 Récapitulatif des Frais**")
+
+                tarif_type = "OLD (ancienne tarification)" if use_old_pricing else "NEW (nouvelle tarification)"
+                st.write(f"**Tarification appliquée:** {tarif_type}")
+
                 if registration_fee_paid:
-                    total_fee_calculated = course_fee
                     st.success(f"✅ Frais d'inscription déjà payés pour cette année académique")
                     st.info(f"**Prix du cours:** {course_fee:,.0f} DA")
                 else:
-                    total_fee_calculated = course_fee + INSCRIPTION_FEE
-                    st.info(f"**Prix du cours:** {course_fee:,.0f} DA + **Frais d'inscription:** {INSCRIPTION_FEE:,.0f} DA = **{total_fee_calculated:,.0f} DA**")
+                    st.info(f"**Prix du cours:** {course_fee:,.0f} DA + **Frais d'inscription:** {INSCRIPTION_FEE:,.0f} DA = **{total_fee:,.0f} DA**")
 
-                # Champ de montant total TOUJOURS éditable
-                st.divider()
-                st.markdown("**💰 Montant Total du Cours**")
-                total_fee = st.number_input(
-                    "Montant total (DA) *",
-                    min_value=0.0,
-                    value=float(total_fee_calculated),
-                    step=1000.0,
-                    help="Vous pouvez modifier ce montant si nécessaire (ex: tarif spécial)",
-                    key=f"total_fee_input_{form_key}"
-                )
+                st.markdown(f"### **TOTAL: {total_fee:,.0f} DA**")
 
-                # Avertir si le montant a été modifié
-                if total_fee != total_fee_calculated:
-                    st.warning(f"⚠️ Montant modifié : {total_fee:,.0f} DA (au lieu de {total_fee_calculated:,.0f} DA)")
-
-                # Champ du montant du premier paiement - SIMPLIFIÉ
+                # Champ du montant du premier paiement
                 st.divider()
                 st.markdown("**💳 Premier Paiement**")
 
@@ -387,13 +389,10 @@ def show():
                         value=float(total_fee),
                         step=1000.0,
                         key=f"payment_amount_{form_key}",
-                        help="Le montant total doit être payé pour activer l'inscription"
+                        help="Le montant total doit être payé"
                     )
                 else:
-                    # Autres cours : paiement flexible
-                    if not registration_fee_paid:
-                        st.info(f"💡 Le premier paiement doit inclure les frais d'inscription ({INSCRIPTION_FEE:,.0f} DA)")
-
+                    # Autres cours : paiement flexible (échelonnement possible)
                     payment_amount = st.number_input(
                         "Montant du premier paiement (DA) *",
                         min_value=0.0,
@@ -402,6 +401,11 @@ def show():
                         key=f"payment_amount_{form_key}",
                         help="Vous pouvez payer en plusieurs fois"
                     )
+
+                    # Afficher le reste à payer
+                    if payment_amount < total_fee:
+                        reste = total_fee - payment_amount
+                        st.info(f"💡 Reste à payer : {reste:,.0f} DA")
 
                 # Méthode de paiement
                 payment_method = st.selectbox(

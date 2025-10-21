@@ -398,6 +398,9 @@ def show():
                         student_data = student_options[selected_student]
                         group_data = group_options[selected_group]
 
+                        # Debug au moment du submit
+                        st.write(f"🔍 **DEBUG SUBMIT:** total_fee={total_fee}, payment_amount={payment_amount}, level={level}")
+
                         # Vérifier les conditions d'activation
                         mode = group_data['mode']
                         enrollment_active = False

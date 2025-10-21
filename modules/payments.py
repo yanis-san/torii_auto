@@ -345,7 +345,7 @@ def show():
                     "Appliquer l'ancienne tarification (OLD) pour cet étudiant",
                     value=group_is_old_pricing,  # Par défaut = tarif du groupe
                     key=f"use_old_pricing_{form_key}",
-                    help="Cochez pour appliquer les anciens tarifs à cet étudiant, même si le groupe est en nouvelle tarification"
+                    help="Cochez pour appliquer l'ancien tarif à cet étudiant"
                 )
 
                 # Calculer le prix du cours selon le choix de tarification
@@ -358,54 +358,29 @@ def show():
                 # Vérifier si les frais d'inscription ont déjà été payés cette année
                 registration_fee_paid = get_student_registration_status(supabase, student_data['id'])
 
-                # Calculer le montant total
+                # Calculer le montant total (sera sauvegardé dans enrollments.total_course_fee)
                 total_fee = course_fee + (0 if registration_fee_paid else INSCRIPTION_FEE)
-
-                # Afficher le récapitulatif
-                st.divider()
-                st.markdown("**💰 Récapitulatif des Frais**")
-
-                tarif_type = "OLD (ancienne tarification)" if use_old_pricing else "NEW (nouvelle tarification)"
-                st.write(f"**Tarification appliquée:** {tarif_type}")
-
-                if registration_fee_paid:
-                    st.success(f"✅ Frais d'inscription déjà payés pour cette année académique")
-                    st.info(f"**Prix du cours:** {course_fee:,.0f} DA")
-                else:
-                    st.info(f"**Prix du cours:** {course_fee:,.0f} DA + **Frais d'inscription:** {INSCRIPTION_FEE:,.0f} DA = **{total_fee:,.0f} DA**")
-
-                st.markdown(f"### **TOTAL: {total_fee:,.0f} DA**")
 
                 # Champ du montant du premier paiement
                 st.divider()
-                st.markdown("**💳 Premier Paiement**")
-
-                # Cours individuels en ligne : paiement intégral obligatoire
                 if 'individual' in mode and 'online' in mode:
-                    st.warning("⚠️ Paiement intégral requis pour les cours individuels en ligne")
+                    # Cours individuels en ligne : paiement intégral obligatoire
                     payment_amount = st.number_input(
                         "Montant du premier paiement (DA) *",
                         min_value=float(total_fee),
                         value=float(total_fee),
                         step=1000.0,
-                        key=f"payment_amount_{form_key}",
-                        help="Le montant total doit être payé"
+                        key=f"payment_amount_{form_key}"
                     )
                 else:
-                    # Autres cours : paiement flexible (échelonnement possible)
+                    # Autres cours : paiement flexible
                     payment_amount = st.number_input(
                         "Montant du premier paiement (DA) *",
                         min_value=0.0,
-                        value=float(total_fee),  # Par défaut : paiement complet
+                        value=float(total_fee),
                         step=1000.0,
-                        key=f"payment_amount_{form_key}",
-                        help="Vous pouvez payer en plusieurs fois"
+                        key=f"payment_amount_{form_key}"
                     )
-
-                    # Afficher le reste à payer
-                    if payment_amount < total_fee:
-                        reste = total_fee - payment_amount
-                        st.info(f"💡 Reste à payer : {reste:,.0f} DA")
 
                 # Méthode de paiement
                 payment_method = st.selectbox(

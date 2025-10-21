@@ -329,24 +329,28 @@ def show():
             else:
                 level = st.number_input("Niveau *", min_value=1, value=1)
 
-            # CHECKBOX OLD/NEW - Doit être définie AVANT le if pour être capturée au submit
+            # CHECKBOX OLD/NEW - UNE SEULE définition pour être capturée au submit
             st.divider()
+
+            # Déterminer la valeur par défaut de la checkbox
             if selected_group and selected_student:
                 group_data_for_checkbox = group_options[selected_group]
-                group_is_old_pricing = group_data_for_checkbox.get('is_old_pricing', False)
-                use_old_pricing = st.checkbox(
-                    "Appliquer l'ancienne tarification (OLD) pour cet étudiant",
-                    value=group_is_old_pricing,
-                    key=f"use_old_pricing_{form_key}",
-                    help="Cochez pour appliquer l'ancien tarif à cet étudiant"
-                )
+                default_old_pricing = group_data_for_checkbox.get('is_old_pricing', False)
+                checkbox_disabled = False
+                checkbox_help = "Cochez pour appliquer l'ancien tarif à cet étudiant"
             else:
-                use_old_pricing = st.checkbox(
-                    "Appliquer l'ancienne tarification (OLD) pour cet étudiant",
-                    value=False,
-                    disabled=True,
-                    help="Sélectionnez d'abord un étudiant et un groupe"
-                )
+                default_old_pricing = False
+                checkbox_disabled = True
+                checkbox_help = "Sélectionnez d'abord un étudiant et un groupe"
+
+            # UNE SEULE checkbox (pas deux!)
+            use_old_pricing = st.checkbox(
+                "Appliquer l'ancienne tarification (OLD) pour cet étudiant",
+                value=default_old_pricing,
+                disabled=checkbox_disabled,
+                key=f"use_old_pricing_{form_key}" if form_key else "use_old_pricing_default",
+                help=checkbox_help
+            )
 
             # Calculer automatiquement les frais
             if selected_group and selected_student:

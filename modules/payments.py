@@ -280,7 +280,18 @@ def show():
                 st.error(f"Erreur : {str(e)}")
                 selected_group = None
 
-            level = st.number_input("Niveau *", min_value=1, value=1)
+            # Créer une clé unique si on a un groupe et un étudiant sélectionnés
+            form_key = None
+            if selected_group and selected_student:
+                group_data_temp = group_options[selected_group]
+                student_data_temp = student_options[selected_student]
+                form_key = f"{group_data_temp['id']}_{student_data_temp['id']}"
+
+            # Afficher le champ niveau avec une clé dynamique si disponible
+            if form_key:
+                level = st.number_input("Niveau *", min_value=1, value=1, key=f"level_{form_key}")
+            else:
+                level = st.number_input("Niveau *", min_value=1, value=1)
 
             # Calculer automatiquement les frais
             if selected_group and selected_student:
@@ -292,7 +303,7 @@ def show():
                 duration = group_data['duration_months']
 
                 if 'individual' in mode:
-                    hours = st.number_input("Nombre d'heures", min_value=1, value=10)
+                    hours = st.number_input("Nombre d'heures", min_value=1, value=10, key=f"hours_{form_key}")
                     course_fee = calculate_course_fee(lang_name, mode, duration, hours)
                 else:
                     course_fee = calculate_course_fee(lang_name, mode, duration)
@@ -319,7 +330,7 @@ def show():
                     value=float(total_fee_calculated),
                     step=1000.0,
                     help="Vous pouvez modifier ce montant si nécessaire (ex: tarif différent du groupe)",
-                    key="total_fee_input"
+                    key=f"total_fee_input_{form_key}"
                 )
 
                 # Afficher un avertissement si le montant a été modifié
@@ -340,7 +351,7 @@ def show():
                     st.warning("⚠️ Les cours en ligne individuels nécessitent un paiement intégral pour activer l'inscription.")
                     min_payment = float(total_fee)
                     payment_amount = st.number_input(f"Montant du premier paiement (minimum {min_payment:,.0f} DA) *",
-                                                     min_value=min_payment, value=min_payment, step=1000.0)
+                                                     min_value=min_payment, value=min_payment, step=1000.0, key=f"payment_amount_{form_key}")
                 else:
                     # Cours en groupe ou individuels présentiels : paiement flexible
                     if registration_fee_paid:
@@ -353,7 +364,7 @@ def show():
                         st.info(f"💡 Paiement en 1, 2 ou 3 fois possible. Le premier paiement doit être au minimum {INSCRIPTION_FEE:,.0f} DA (frais d'inscription).")
 
                     payment_amount = st.number_input(f"Montant du premier paiement (minimum {min_payment:,.0f} DA) *",
-                                                     min_value=min_payment, value=min_payment, step=1000.0)
+                                                     min_value=min_payment, value=min_payment, step=1000.0, key=f"payment_amount_{form_key}")
 
                 # Méthode de paiement
                 payment_method = st.selectbox(

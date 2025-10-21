@@ -340,6 +340,10 @@ def show():
                 # Calcul de la mensualité pour info
                 course_fee_only = total_fee - (INSCRIPTION_FEE if not registration_fee_paid else 0)
                 monthly_fee = course_fee_only / duration if duration > 0 else 0
+
+                # Debug
+                st.write(f"**DEBUG:** total_fee={total_fee}, course_fee_only={course_fee_only}, monthly_fee={monthly_fee}, registration_fee_paid={registration_fee_paid}")
+
                 if registration_fee_paid:
                     st.caption(f"💡 Paiement échelonné possible : environ {monthly_fee:,.0f} DA/mois sur {duration} mois")
                 else:
@@ -350,6 +354,7 @@ def show():
                     # Cours individuels en ligne : paiement intégral requis
                     st.warning("⚠️ Les cours en ligne individuels nécessitent un paiement intégral pour activer l'inscription.")
                     min_payment = float(total_fee)
+                    st.write(f"**DEBUG:** Mode individual+online, min_payment={min_payment}")
                     payment_amount = st.number_input(f"Montant du premier paiement (minimum {min_payment:,.0f} DA) *",
                                                      min_value=min_payment, value=min_payment, step=1000.0, key=f"payment_amount_{form_key}")
                 else:
@@ -358,13 +363,17 @@ def show():
                         # Pas de frais d'inscription à payer, minimum = une mensualité
                         min_payment = float(monthly_fee)
                         st.info(f"💡 Paiement en 1, 2 ou 3 fois possible. Minimum {min_payment:,.0f} DA.")
+                        st.write(f"**DEBUG:** Frais déjà payés, min_payment (mensualité)={min_payment}")
                     else:
                         # Frais d'inscription requis au premier paiement
                         min_payment = float(INSCRIPTION_FEE)
                         st.info(f"💡 Paiement en 1, 2 ou 3 fois possible. Le premier paiement doit être au minimum {INSCRIPTION_FEE:,.0f} DA (frais d'inscription).")
+                        st.write(f"**DEBUG:** Frais PAS payés, min_payment (frais inscription)={min_payment}")
 
                     payment_amount = st.number_input(f"Montant du premier paiement (minimum {min_payment:,.0f} DA) *",
                                                      min_value=min_payment, value=min_payment, step=1000.0, key=f"payment_amount_{form_key}")
+
+                st.write(f"**DEBUG:** payment_amount final (widget)={payment_amount}")
 
                 # Méthode de paiement
                 payment_method = st.selectbox(

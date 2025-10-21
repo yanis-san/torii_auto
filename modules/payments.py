@@ -329,6 +329,25 @@ def show():
             else:
                 level = st.number_input("Niveau *", min_value=1, value=1)
 
+            # CHECKBOX OLD/NEW - Doit être définie AVANT le if pour être capturée au submit
+            st.divider()
+            if selected_group and selected_student:
+                group_data_for_checkbox = group_options[selected_group]
+                group_is_old_pricing = group_data_for_checkbox.get('is_old_pricing', False)
+                use_old_pricing = st.checkbox(
+                    "Appliquer l'ancienne tarification (OLD) pour cet étudiant",
+                    value=group_is_old_pricing,
+                    key=f"use_old_pricing_{form_key}",
+                    help="Cochez pour appliquer l'ancien tarif à cet étudiant"
+                )
+            else:
+                use_old_pricing = st.checkbox(
+                    "Appliquer l'ancienne tarification (OLD) pour cet étudiant",
+                    value=False,
+                    disabled=True,
+                    help="Sélectionnez d'abord un étudiant et un groupe"
+                )
+
             # Calculer automatiquement les frais
             if selected_group and selected_student:
                 group_data = group_options[selected_group]
@@ -337,16 +356,6 @@ def show():
                 lang_name = group_data['languages']['name'] if group_data.get('languages') else 'Japonais'
                 mode = group_data['mode']
                 duration = group_data['duration_months']
-                group_is_old_pricing = group_data.get('is_old_pricing', False)
-
-                # Checkbox pour appliquer l'ancienne tarification pour cet étudiant spécifiquement
-                st.divider()
-                use_old_pricing = st.checkbox(
-                    "Appliquer l'ancienne tarification (OLD) pour cet étudiant",
-                    value=group_is_old_pricing,  # Par défaut = tarif du groupe
-                    key=f"use_old_pricing_{form_key}",
-                    help="Cochez pour appliquer l'ancien tarif à cet étudiant"
-                )
 
                 # Calculer le prix du cours selon le choix de tarification
                 if 'individual' in mode:
@@ -394,7 +403,6 @@ def show():
                 payment_amount = 0
                 registration_fee_paid = False
                 payment_method = "💵 Liquide"
-                use_old_pricing = False
                 hours = 10
 
             st.markdown("*Les champs marqués d'un astérisque sont obligatoires*")

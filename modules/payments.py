@@ -413,15 +413,22 @@ def show():
                         mode = group_data['mode']
                         duration = group_data['duration_months']
 
+                        # DEBUG: Afficher use_old_pricing au moment du submit
+                        st.write(f"DEBUG SUBMIT: use_old_pricing = {use_old_pricing}")
+
                         # Utiliser use_old_pricing et hours capturés au submit
                         if 'individual' in mode:
                             course_fee = calculate_course_fee(lang_name, mode, use_old_pricing, hours)
                         else:
                             course_fee = calculate_course_fee(lang_name, mode, use_old_pricing)
 
+                        st.write(f"DEBUG SUBMIT: course_fee = {course_fee} DA")
+
                         # Recalculer total_fee avec le bon course_fee
                         registration_fee_paid_submit = get_student_registration_status(supabase, student_data['id'])
                         total_fee = course_fee + (0 if registration_fee_paid_submit else INSCRIPTION_FEE)
+
+                        st.write(f"DEBUG SUBMIT: total_fee = {total_fee} DA (course_fee {course_fee} + frais {0 if registration_fee_paid_submit else INSCRIPTION_FEE})")
 
                         # Vérifier les conditions d'activation
                         enrollment_active = False
